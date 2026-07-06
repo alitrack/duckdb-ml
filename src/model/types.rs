@@ -11,6 +11,7 @@ pub enum Algorithm {
     Onnx,
     DecisionTreeRegressor,
     RandomForestRegressor,
+    KMeans,
 }
 
 impl std::fmt::Display for Algorithm {
@@ -22,6 +23,7 @@ impl std::fmt::Display for Algorithm {
             Algorithm::Onnx => write!(f, "onnx"),
             Algorithm::DecisionTreeRegressor => write!(f, "decision_tree"),
             Algorithm::RandomForestRegressor => write!(f, "random_forest"),
+            Algorithm::KMeans => write!(f, "kmeans"),
         }
     }
 }
@@ -35,6 +37,7 @@ impl Algorithm {
             "onnx" => Some(Algorithm::Onnx),
             "decision_tree" => Some(Algorithm::DecisionTreeRegressor),
             "random_forest" => Some(Algorithm::RandomForestRegressor),
+            "kmeans" => Some(Algorithm::KMeans),
             _ => None,
         }
     }

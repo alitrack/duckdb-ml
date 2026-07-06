@@ -1,3 +1,4 @@
+pub mod kmeans;
 pub mod linear;
 pub mod logistic;
 pub mod registry;

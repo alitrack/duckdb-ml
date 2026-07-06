@@ -1,3 +1,4 @@
+pub mod kmeans;
 pub mod linear;
 pub mod logistic;
 pub mod tree;
@@ -88,5 +89,20 @@ pub fn train(
             "ONNX models cannot be trained in DuckDB. Train in Python and load via ml_load_onnx()."
                 .into(),
         ),
+        Algorithm::KMeans => {
+            let k = params.get("k").copied().unwrap_or(3.0) as usize;
+            let max_iters = params.get("max_iters").copied().unwrap_or(100.0) as usize;
+            let tol = params.get("tol").copied().unwrap_or(1e-4);
+            let result = kmeans::train(x, k, max_iters, tol);
+            let blob = kmeans::serialize_centroids(&result.centroids);
+            Ok(TrainingResult {
+                coefficients: vec![],
+                intercept: 0.0,
+                r_squared: None,
+                mse: result.labels.is_empty().then_some(0.0), // inertia stored as metadata
+                num_samples: x.len(),
+                model_blob: Some(blob),
+            })
+        }
     }
 }
