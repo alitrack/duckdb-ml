@@ -1,3 +1,4 @@
+pub mod load;
 pub mod model;
 pub mod predict;
 pub mod storage;
@@ -18,6 +19,9 @@ pub unsafe fn ml_init(con: Connection) -> Result<(), Box<dyn Error>> {
     // Register table functions
     con.register_table_function::<predict::PredictFn>("ml_predict")?;
     con.register_table_function::<train::table_fn::TrainFn>("ml_train")?;
+    con.register_table_function::<load::LoadXgbFn>("ml_load_xgboost")?;
+    #[cfg(feature = "onnx")]
+    con.register_table_function::<load::LoadOnnxFn>("ml_load_onnx")?;
     con.register_table_function::<api::ListModelsFn>("ml_list_models")?;
 
     log::info!("duckdb_ml initialized successfully");
