@@ -15,6 +15,13 @@ log = "0.4"
 env_logger = "0.11"
 thiserror = "2"
 
+# Optional ONNX support
+ort = { version = "2.0.0-rc.12", optional = true }
+
+[features]
+default = []
+onnx = ["dep:ort"]
+
 [lib]
 crate-type = ["cdylib"]
 

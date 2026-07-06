@@ -31,5 +31,9 @@ pub fn train(
             let epochs = params.get("epochs").copied().unwrap_or(100.0) as usize;
             logistic::train(x, y, lr, epochs)
         }
+        Algorithm::Onnx => Err(
+            "ONNX models cannot be trained in DuckDB. Train in Python and load via ml_load_onnx()."
+                .into(),
+        ),
     }
 }

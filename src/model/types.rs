@@ -8,6 +8,7 @@ pub enum Algorithm {
     LinearRegression,
     RidgeRegression,
     LogisticRegression,
+    Onnx,
 }
 
 impl std::fmt::Display for Algorithm {
@@ -16,6 +17,7 @@ impl std::fmt::Display for Algorithm {
             Algorithm::LinearRegression => write!(f, "linear_regression"),
             Algorithm::RidgeRegression => write!(f, "ridge_regression"),
             Algorithm::LogisticRegression => write!(f, "logistic_regression"),
+            Algorithm::Onnx => write!(f, "onnx"),
         }
     }
 }
@@ -26,6 +28,7 @@ impl Algorithm {
             "linear_regression" => Some(Algorithm::LinearRegression),
             "ridge_regression" => Some(Algorithm::RidgeRegression),
             "logistic_regression" => Some(Algorithm::LogisticRegression),
+            "onnx" => Some(Algorithm::Onnx),
             _ => None,
         }
     }
