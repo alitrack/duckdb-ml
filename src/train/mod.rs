@@ -89,6 +89,10 @@ pub fn train(
             "ONNX models cannot be trained in DuckDB. Train in Python and load via ml_load_onnx()."
                 .into(),
         ),
+        Algorithm::XGBoostRegressor | Algorithm::XGBoostClassifier => Err(
+            "XGBoost models cannot be trained in DuckDB. Train in Python and load the JSON model."
+                .into(),
+        ),
         Algorithm::KMeans => {
             let k = params.get("k").copied().unwrap_or(3.0) as usize;
             let max_iters = params.get("max_iters").copied().unwrap_or(100.0) as usize;

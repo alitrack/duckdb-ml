@@ -3,6 +3,7 @@ pub mod linear;
 pub mod logistic;
 pub mod registry;
 pub mod tree;
+pub mod xgboost;
 
 #[cfg(feature = "onnx")]
 pub mod onnx;

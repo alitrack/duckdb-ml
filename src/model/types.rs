@@ -12,6 +12,8 @@ pub enum Algorithm {
     DecisionTreeRegressor,
     RandomForestRegressor,
     KMeans,
+    XGBoostRegressor,
+    XGBoostClassifier,
 }
 
 impl std::fmt::Display for Algorithm {
@@ -24,6 +26,8 @@ impl std::fmt::Display for Algorithm {
             Algorithm::DecisionTreeRegressor => write!(f, "decision_tree"),
             Algorithm::RandomForestRegressor => write!(f, "random_forest"),
             Algorithm::KMeans => write!(f, "kmeans"),
+            Algorithm::XGBoostRegressor => write!(f, "xgboost_regressor"),
+            Algorithm::XGBoostClassifier => write!(f, "xgboost_classifier"),
         }
     }
 }
