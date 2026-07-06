@@ -14,6 +14,10 @@ pub enum Algorithm {
     KMeans,
     XGBoostRegressor,
     XGBoostClassifier,
+    KNNRegressor,
+    KNNClassifier,
+    NaiveBayes,
+    PCA,
 }
 
 impl std::fmt::Display for Algorithm {
@@ -28,6 +32,10 @@ impl std::fmt::Display for Algorithm {
             Algorithm::KMeans => write!(f, "kmeans"),
             Algorithm::XGBoostRegressor => write!(f, "xgboost_regressor"),
             Algorithm::XGBoostClassifier => write!(f, "xgboost_classifier"),
+            Algorithm::KNNRegressor => write!(f, "knn_regressor"),
+            Algorithm::KNNClassifier => write!(f, "knn_classifier"),
+            Algorithm::NaiveBayes => write!(f, "naive_bayes"),
+            Algorithm::PCA => write!(f, "pca"),
         }
     }
 }
@@ -42,6 +50,12 @@ impl Algorithm {
             "decision_tree" => Some(Algorithm::DecisionTreeRegressor),
             "random_forest" => Some(Algorithm::RandomForestRegressor),
             "kmeans" => Some(Algorithm::KMeans),
+            "xgboost_regressor" => Some(Algorithm::XGBoostRegressor),
+            "xgboost_classifier" => Some(Algorithm::XGBoostClassifier),
+            "knn_regressor" => Some(Algorithm::KNNRegressor),
+            "knn_classifier" => Some(Algorithm::KNNClassifier),
+            "naive_bayes" => Some(Algorithm::NaiveBayes),
+            "pca" => Some(Algorithm::PCA),
             _ => None,
         }
     }

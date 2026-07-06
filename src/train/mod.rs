@@ -108,5 +108,66 @@ pub fn train(
                 model_blob: Some(blob),
             })
         }
+        Algorithm::KNNRegressor => {
+            let k = params.get("k").copied().unwrap_or(5.0) as usize;
+            let model = crate::model::knn::KnnModel::new(
+                x.to_vec(),
+                y.to_vec(),
+                k,
+                crate::model::knn::KnnTask::Regression,
+            );
+            let blob = model.to_bytes();
+            Ok(TrainingResult {
+                coefficients: vec![],
+                intercept: 0.0,
+                r_squared: None,
+                mse: None,
+                num_samples: x.len(),
+                model_blob: Some(blob),
+            })
+        }
+        Algorithm::KNNClassifier => {
+            let k = params.get("k").copied().unwrap_or(5.0) as usize;
+            let model = crate::model::knn::KnnModel::new(
+                x.to_vec(),
+                y.to_vec(),
+                k,
+                crate::model::knn::KnnTask::Classification,
+            );
+            let blob = model.to_bytes();
+            Ok(TrainingResult {
+                coefficients: vec![],
+                intercept: 0.0,
+                r_squared: None,
+                mse: None,
+                num_samples: x.len(),
+                model_blob: Some(blob),
+            })
+        }
+        Algorithm::NaiveBayes => {
+            let model = crate::model::naive_bayes::NaiveBayesModel::train(x, y);
+            let blob = model.to_bytes();
+            Ok(TrainingResult {
+                coefficients: vec![],
+                intercept: 0.0,
+                r_squared: None,
+                mse: None,
+                num_samples: x.len(),
+                model_blob: Some(blob),
+            })
+        }
+        Algorithm::PCA => {
+            let k = params.get("k").copied().unwrap_or(2.0) as usize;
+            let model = crate::model::pca::PcaModel::fit(x, k);
+            let blob = model.to_bytes();
+            Ok(TrainingResult {
+                coefficients: vec![],
+                intercept: 0.0,
+                r_squared: None,
+                mse: None,
+                num_samples: x.len(),
+                model_blob: Some(blob),
+            })
+        }
     }
 }
