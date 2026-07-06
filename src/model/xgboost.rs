@@ -347,13 +347,22 @@ mod tests {
 
         let model = XgbModel::from_json(&json_bytes).unwrap();
         assert_eq!(model.num_features, 3);
-        assert_eq!(model.n_trees(), 1);
 
-        // Known predictions from the Python reference run
-        let p0 = model.predict(&[1.0, 2.0, 3.0]).unwrap();
-        assert!((p0 - 31.0).abs() < 0.5, "p0={p0}");
+        // Verify ALL 6 training samples match Python xgboost output
+        let x: Vec<Vec<f64>> = (0..6)
+            .map(|i| {
+                let base = (i * 3 + 1) as f64;
+                vec![base, base + 1.0, base + 2.0]
+            })
+            .collect();
+        let expected = [27.8, 27.8, 33.6125, 36.3875, 42.2, 42.2];
 
-        let p2 = model.predict(&[7.0, 8.0, 9.0]).unwrap();
-        assert!((p2 - 34.25).abs() < 0.5, "p2={p2}");
+        for (i, (row, &exp)) in x.iter().zip(expected.iter()).enumerate() {
+            let pred = model.predict(row).unwrap();
+            assert!(
+                (pred - exp).abs() < 0.01,
+                "sample {i}: pred={pred}, expected={exp}"
+            );
+        }
     }
 }
