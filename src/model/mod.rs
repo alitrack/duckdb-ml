@@ -1,6 +1,7 @@
 pub mod linear;
 pub mod logistic;
 pub mod registry;
+pub mod tree;
 
 #[cfg(feature = "onnx")]
 pub mod onnx;

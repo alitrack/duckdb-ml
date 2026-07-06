@@ -82,5 +82,6 @@ pub fn train(
         r_squared: None,
         mse: None,
         num_samples: n_samples,
+        model_blob: None,
     })
 }

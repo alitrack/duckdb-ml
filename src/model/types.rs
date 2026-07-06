@@ -9,6 +9,8 @@ pub enum Algorithm {
     RidgeRegression,
     LogisticRegression,
     Onnx,
+    DecisionTreeRegressor,
+    RandomForestRegressor,
 }
 
 impl std::fmt::Display for Algorithm {
@@ -18,6 +20,8 @@ impl std::fmt::Display for Algorithm {
             Algorithm::RidgeRegression => write!(f, "ridge_regression"),
             Algorithm::LogisticRegression => write!(f, "logistic_regression"),
             Algorithm::Onnx => write!(f, "onnx"),
+            Algorithm::DecisionTreeRegressor => write!(f, "decision_tree"),
+            Algorithm::RandomForestRegressor => write!(f, "random_forest"),
         }
     }
 }
@@ -29,6 +33,8 @@ impl Algorithm {
             "ridge_regression" => Some(Algorithm::RidgeRegression),
             "logistic_regression" => Some(Algorithm::LogisticRegression),
             "onnx" => Some(Algorithm::Onnx),
+            "decision_tree" => Some(Algorithm::DecisionTreeRegressor),
+            "random_forest" => Some(Algorithm::RandomForestRegressor),
             _ => None,
         }
     }

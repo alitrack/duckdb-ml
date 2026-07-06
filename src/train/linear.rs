@@ -116,5 +116,6 @@ pub fn train(x: &[Vec<f64>], y: &[f64], lambda: f64) -> Result<TrainingResult, B
         r_squared,
         mse,
         num_samples: n_samples,
+        model_blob: None,
     })
 }
