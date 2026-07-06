@@ -1,6 +1,7 @@
 pub mod kmeans;
 pub mod linear;
 pub mod logistic;
+pub mod table_fn;
 pub mod tree;
 
 use crate::model::Algorithm;
