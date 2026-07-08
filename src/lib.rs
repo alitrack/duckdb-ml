@@ -3,6 +3,7 @@ pub mod deploy;
 pub mod load;
 pub mod model;
 pub mod predict;
+pub mod snapshot;
 pub mod storage;
 pub mod train;
 
@@ -20,6 +21,7 @@ pub unsafe fn ml_init(con: Connection) -> Result<(), Box<dyn Error>> {
 
     // v0.9 functions
     con.register_table_function::<predict::PredictFn>("ml_predict")?;
+    con.register_table_function::<predict::batch::PredictBatchFn>("ml_predict_batch")?;
     con.register_table_function::<train::table_fn::TrainFn>("ml_train")?;
     con.register_table_function::<load::LoadXgbFn>("ml_load_xgboost")?;
     #[cfg(feature = "onnx")]
@@ -29,6 +31,9 @@ pub unsafe fn ml_init(con: Connection) -> Result<(), Box<dyn Error>> {
     // v0.10: version management + AutoML
     con.register_table_function::<deploy::DeployFn>("ml_deploy")?;
     con.register_table_function::<automl::CompareFn>("ml_compare")?;
+
+    // v0.13: data version tracking
+    con.register_table_function::<snapshot::SnapshotFn>("ml_snapshot")?;
 
     log::info!("duckdb_ml initialized successfully");
     Ok(())

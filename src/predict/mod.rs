@@ -1,6 +1,8 @@
 //! Predict via DuckDB table function
 //! Usage: SELECT * FROM ml_predict('model_name', val1, val2, ...)
 
+pub mod batch;
+
 use crate::model::global_registry;
 use duckdb::{
     Result,

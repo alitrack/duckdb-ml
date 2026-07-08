@@ -17,14 +17,28 @@ pub struct Deployment {
     pub deployed_at: Instant,
 }
 
-/// Thread-safe model registry with LRU caching and deployment tracking
+/// Thread-safe model registry with LRU caching, deployment tracking, and data snapshots
 pub struct ModelRegistry {
     models: RwLock<HashMap<String, CacheEntry>>,
     /// model_name -> current deployment
     deployments: RwLock<HashMap<String, Deployment>>,
     /// model_name -> previous deployments (for rollback)
     deployment_history: RwLock<HashMap<String, Vec<Deployment>>>,
+    /// Data snapshots: (model_name, snapshot_name) -> snapshot metadata
+    snapshots: RwLock<Vec<DataSnapshot>>,
     max_cached: usize,
+}
+
+/// Metadata about a training data snapshot
+#[derive(Debug, Clone)]
+pub struct DataSnapshot {
+    pub model_name: String,
+    pub relation_name: String,
+    pub n_features: usize,
+    pub n_samples: usize,
+    pub target_column: String,
+    pub feature_columns: Vec<String>,
+    pub data_hash: String,
 }
 
 impl ModelRegistry {
@@ -33,6 +47,7 @@ impl ModelRegistry {
             models: RwLock::new(HashMap::new()),
             deployments: RwLock::new(HashMap::new()),
             deployment_history: RwLock::new(HashMap::new()),
+            snapshots: RwLock::new(Vec::new()),
             max_cached,
         }
     }
@@ -113,17 +128,18 @@ impl ModelRegistry {
                 let mut best_key = None;
                 let mut best_r2 = f64::NEG_INFINITY;
                 for key in models.keys() {
-                    if (key == model_name || key.starts_with(&prefix))
-                        && let Some(entry) = models.get(key)
-                    {
-                        let r2 = entry
-                            .model
-                            .metadata()
-                            .r_squared
-                            .unwrap_or(f64::NEG_INFINITY);
-                        if r2 > best_r2 {
-                            best_r2 = r2;
-                            best_key = Some(key.clone());
+                    #[allow(clippy::collapsible_if)]
+                    if key == model_name || key.starts_with(&prefix) {
+                        if let Some(entry) = models.get(key) {
+                            let r2 = entry
+                                .model
+                                .metadata()
+                                .r_squared
+                                .unwrap_or(f64::NEG_INFINITY);
+                            if r2 > best_r2 {
+                                best_r2 = r2;
+                                best_key = Some(key.clone());
+                            }
                         }
                     }
                 }
@@ -204,13 +220,32 @@ impl ModelRegistry {
     /// Falls back to exact name lookup if no deployment exists.
     pub fn get_deployed_model(&self, model_name: &str) -> Option<Arc<dyn MlModel>> {
         // Try deployment first
-        if let Some(key) = self.get_deployed(model_name)
-            && let Some(m) = self.get(&key)
-        {
-            return Some(m);
+        #[allow(clippy::collapsible_if)]
+        if let Some(key) = self.get_deployed(model_name) {
+            if let Some(m) = self.get(&key) {
+                return Some(m);
+            }
         }
         // Fall back to exact name
         self.get(model_name)
+    }
+
+    // ── Data snapshot tracking ──
+
+    /// Register a data snapshot
+    pub fn add_snapshot(&self, snap: DataSnapshot) {
+        self.snapshots.write().unwrap().push(snap);
+    }
+
+    /// List snapshots for a model name
+    pub fn list_snapshots(&self, model_name: &str) -> Vec<DataSnapshot> {
+        self.snapshots
+            .read()
+            .unwrap()
+            .iter()
+            .filter(|s| s.model_name == model_name)
+            .cloned()
+            .collect()
     }
 }
 
