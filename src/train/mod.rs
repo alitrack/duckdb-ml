@@ -3,6 +3,7 @@ pub mod kmeans;
 pub mod lasso;
 pub mod linear;
 pub mod logistic;
+pub mod mlp;
 pub mod table_fn;
 pub mod tree;
 
@@ -204,6 +205,25 @@ pub fn train(
                 mse,
                 num_samples: x.len(),
                 model_blob: None, // stored via coefficients for Linear-style models
+            })
+        }
+        Algorithm::MlpRegressor => {
+            let hidden_size = params.get("hidden_size").copied().unwrap_or(8.0) as usize;
+            let lr = params.get("lr").copied().unwrap_or(0.01);
+            let momentum = params.get("momentum").copied().unwrap_or(0.9);
+            let iterations = params.get("iterations").copied().unwrap_or(200.0) as usize;
+            let batch_size = params.get("batch_size").copied().unwrap_or(16.0) as usize;
+            let (weights, r_squared, mse) =
+                mlp::train_mlp(x, y, hidden_size, lr, momentum, iterations, batch_size)?;
+            let blob = bincode::encode_to_vec(&weights, bincode::config::standard())
+                .map_err(|e| e.to_string())?;
+            Ok(TrainingResult {
+                coefficients: vec![],
+                intercept: 0.0,
+                r_squared,
+                mse,
+                num_samples: x.len(),
+                model_blob: Some(blob),
             })
         }
         Algorithm::PCA => {

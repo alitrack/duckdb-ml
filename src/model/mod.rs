@@ -3,6 +3,7 @@ pub mod knn;
 pub mod lasso;
 pub mod linear;
 pub mod logistic;
+pub mod mlp;
 pub mod naive_bayes;
 pub mod pca;
 pub mod registry;

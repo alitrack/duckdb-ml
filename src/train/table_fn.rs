@@ -278,12 +278,16 @@ fn register_from_blob(
                 .map_err(|e| format!("GBDT deserialize: {e:?}"))?;
             return Ok(Arc::new(model));
         }
+        Algorithm::MlpRegressor => {
+            use crate::model::mlp::MlpModel;
+            Arc::new(MlpModel::deserialize(blob)?)
+        }
         Algorithm::NaiveBayes => Arc::new(NbMlModel::deserialize(blob)?),
         Algorithm::PCA => Arc::new(PcaMlModel::deserialize(blob)?),
-        Algorithm::XGBoostRegressor
+        Algorithm::LassoRegression
+        | Algorithm::XGBoostRegressor
         | Algorithm::XGBoostClassifier
-        | Algorithm::Onnx
-        | Algorithm::LassoRegression => {
+        | Algorithm::Onnx => {
             return Err(
                 "XGBoost and ONNX models must be loaded via ml_load_onnx/ml_load_xgboost".into(),
             );

@@ -91,6 +91,7 @@ impl VTab for CompareFn {
                     "lasso_regression".into(),
                     "random_forest".into(),
                     "knn_regressor".into(),
+                    "mlp_regressor".into(),
                 ],
             }
         } else {
@@ -142,6 +143,11 @@ impl VTab for CompareFn {
                                 Algorithm::NaiveBayes => NbMlModel::deserialize(blob)
                                     .ok()
                                     .map(|m| Arc::new(m) as Arc<dyn MlModel>),
+                                Algorithm::MlpRegressor => {
+                                    crate::model::mlp::MlpModel::deserialize(blob)
+                                        .ok()
+                                        .map(|m| Arc::new(m) as Arc<dyn MlModel>)
+                                }
                                 Algorithm::PCA => PcaMlModel::deserialize(blob)
                                     .ok()
                                     .map(|m| Arc::new(m) as Arc<dyn MlModel>),

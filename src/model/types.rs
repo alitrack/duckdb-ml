@@ -21,6 +21,7 @@ pub enum Algorithm {
     NaiveBayes,
     PCA,
     LassoRegression,
+    MlpRegressor,
 }
 
 impl std::fmt::Display for Algorithm {
@@ -42,6 +43,7 @@ impl std::fmt::Display for Algorithm {
             Algorithm::NaiveBayes => write!(f, "naive_bayes"),
             Algorithm::PCA => write!(f, "pca"),
             Algorithm::LassoRegression => write!(f, "lasso_regression"),
+            Algorithm::MlpRegressor => write!(f, "mlp_regressor"),
         }
     }
 }
@@ -65,6 +67,7 @@ impl Algorithm {
             "naive_bayes" => Some(Algorithm::NaiveBayes),
             "pca" => Some(Algorithm::PCA),
             "lasso_regression" => Some(Algorithm::LassoRegression),
+            "mlp_regressor" => Some(Algorithm::MlpRegressor),
             _ => None,
         }
     }
