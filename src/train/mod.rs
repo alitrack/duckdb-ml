@@ -1,5 +1,6 @@
 pub mod gbdt;
 pub mod kmeans;
+pub mod lasso;
 pub mod linear;
 pub mod logistic;
 pub mod table_fn;
@@ -189,6 +190,20 @@ pub fn train(
                 mse: None,
                 num_samples: x.len(),
                 model_blob: Some(blob),
+            })
+        }
+        Algorithm::LassoRegression => {
+            let lambda = params.get("lambda").copied().unwrap_or(0.1);
+            let max_iter = params.get("max_iter").copied().unwrap_or(1000.0) as usize;
+            let tol = params.get("tol").copied().unwrap_or(1e-4);
+            let (coef, r_squared, mse) = lasso::train_lasso(x, y, lambda, max_iter, tol)?;
+            Ok(TrainingResult {
+                coefficients: coef.clone(),
+                intercept: *coef.last().unwrap_or(&0.0),
+                r_squared,
+                mse,
+                num_samples: x.len(),
+                model_blob: None, // stored via coefficients for Linear-style models
             })
         }
         Algorithm::PCA => {

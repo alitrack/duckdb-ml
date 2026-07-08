@@ -20,6 +20,7 @@ pub enum Algorithm {
     KNNClassifier,
     NaiveBayes,
     PCA,
+    LassoRegression,
 }
 
 impl std::fmt::Display for Algorithm {
@@ -40,6 +41,7 @@ impl std::fmt::Display for Algorithm {
             Algorithm::KNNClassifier => write!(f, "knn_classifier"),
             Algorithm::NaiveBayes => write!(f, "naive_bayes"),
             Algorithm::PCA => write!(f, "pca"),
+            Algorithm::LassoRegression => write!(f, "lasso_regression"),
         }
     }
 }
@@ -62,6 +64,7 @@ impl Algorithm {
             "knn_classifier" => Some(Algorithm::KNNClassifier),
             "naive_bayes" => Some(Algorithm::NaiveBayes),
             "pca" => Some(Algorithm::PCA),
+            "lasso_regression" => Some(Algorithm::LassoRegression),
             _ => None,
         }
     }

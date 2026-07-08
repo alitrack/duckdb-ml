@@ -1,5 +1,6 @@
 pub mod kmeans;
 pub mod knn;
+pub mod lasso;
 pub mod linear;
 pub mod logistic;
 pub mod naive_bayes;

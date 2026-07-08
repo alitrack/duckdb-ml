@@ -118,8 +118,8 @@ impl VTab for TrainFn {
                 global_registry().insert(model_name.clone(), arc_model);
             }
         } else {
-            // Linear/logistic models: construct MlModel directly
-            use crate::model::{linear::LinearModel, logistic::LogisticModel};
+            // Linear/logistic/lasso models: construct MlModel directly
+            use crate::model::{lasso::LassoModel, linear::LinearModel, logistic::LogisticModel};
             let lambda = params.get("lambda").copied().unwrap_or(0.0);
             let model: Arc<dyn crate::model::MlModel> = match algorithm {
                 Algorithm::LinearRegression | Algorithm::RidgeRegression => {
@@ -136,6 +136,16 @@ impl VTab for TrainFn {
                     n_samples,
                     result.r_squared,
                 )),
+                Algorithm::LassoRegression => {
+                    let l = params.get("lambda").copied().unwrap_or(0.1);
+                    Arc::new(LassoModel::new(
+                        result.coefficients,
+                        n_samples,
+                        result.r_squared,
+                        result.mse,
+                        l,
+                    ))
+                }
                 _ => {
                     return Err("Linear training result for non-linear algorithm".into());
                 }
@@ -270,7 +280,10 @@ fn register_from_blob(
         }
         Algorithm::NaiveBayes => Arc::new(NbMlModel::deserialize(blob)?),
         Algorithm::PCA => Arc::new(PcaMlModel::deserialize(blob)?),
-        Algorithm::XGBoostRegressor | Algorithm::XGBoostClassifier | Algorithm::Onnx => {
+        Algorithm::XGBoostRegressor
+        | Algorithm::XGBoostClassifier
+        | Algorithm::Onnx
+        | Algorithm::LassoRegression => {
             return Err(
                 "XGBoost and ONNX models must be loaded via ml_load_onnx/ml_load_xgboost".into(),
             );

@@ -88,6 +88,7 @@ impl VTab for CompareFn {
                 ],
                 _ => vec![
                     "linear_regression".into(),
+                    "lasso_regression".into(),
                     "random_forest".into(),
                     "knn_regressor".into(),
                 ],
@@ -169,6 +170,16 @@ impl VTab for CompareFn {
                                     result.r_squared,
                                 ))
                                     as Arc<dyn MlModel>),
+                                Algorithm::LassoRegression => {
+                                    let lambda = params.get("lambda").copied().unwrap_or(0.1);
+                                    Some(Arc::new(crate::model::lasso::LassoModel::new(
+                                        result.coefficients,
+                                        result.num_samples,
+                                        result.r_squared,
+                                        result.mse,
+                                        lambda,
+                                    )) as Arc<dyn MlModel>)
+                                }
                                 _ => None,
                             }
                         };
