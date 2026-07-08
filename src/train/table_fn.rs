@@ -143,6 +143,9 @@ impl VTab for TrainFn {
             global_registry().insert(model_name.clone(), model);
         }
 
+        // Cache features for batch prediction via @model_name syntax
+        global_registry().cache_dataset(&model_name, x.clone());
+
         bind.add_result_column(
             "model_name",
             LogicalTypeHandle::from(LogicalTypeId::Varchar),

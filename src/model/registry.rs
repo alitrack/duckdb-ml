@@ -26,6 +26,8 @@ pub struct ModelRegistry {
     deployment_history: RwLock<HashMap<String, Vec<Deployment>>>,
     /// Data snapshots: (model_name, snapshot_name) -> snapshot metadata
     snapshots: RwLock<Vec<DataSnapshot>>,
+    /// Cached training datasets: name -> features for batch prediction
+    datasets: RwLock<HashMap<String, Vec<Vec<f64>>>>,
     max_cached: usize,
 }
 
@@ -48,6 +50,7 @@ impl ModelRegistry {
             deployments: RwLock::new(HashMap::new()),
             deployment_history: RwLock::new(HashMap::new()),
             snapshots: RwLock::new(Vec::new()),
+            datasets: RwLock::new(HashMap::new()),
             max_cached,
         }
     }
@@ -246,6 +249,21 @@ impl ModelRegistry {
             .filter(|s| s.model_name == model_name)
             .cloned()
             .collect()
+    }
+
+    // ── Dataset caching (for batch prediction with @name references) ──
+
+    /// Cache a dataset under a name for later batch prediction
+    pub fn cache_dataset(&self, name: &str, features: Vec<Vec<f64>>) {
+        self.datasets
+            .write()
+            .unwrap()
+            .insert(name.to_string(), features);
+    }
+
+    /// Retrieve a cached dataset by name
+    pub fn get_dataset(&self, name: &str) -> Option<Vec<Vec<f64>>> {
+        self.datasets.read().unwrap().get(name).cloned()
     }
 }
 

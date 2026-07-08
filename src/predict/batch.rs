@@ -41,8 +41,18 @@ impl VTab for PredictBatchFn {
         let model_name: String = bind.get_parameter(0).to_string();
         let features_json: String = bind.get_parameter(1).to_string();
 
-        let features: Vec<Vec<f64>> = serde_json::from_str(&features_json)
-            .map_err(|e| format!("Invalid features JSON: {e}"))?;
+        // @name syntax: look up cached dataset from global registry (populated by ml_train)
+        let features: Vec<Vec<f64>> = if let Some(dataset_name) = features_json.strip_prefix('@') {
+            global_registry()
+                .get_dataset(dataset_name)
+                .unwrap_or_else(|| {
+                    let json = features_json.clone();
+                    serde_json::from_str(&json).unwrap_or_default()
+                })
+        } else {
+            serde_json::from_str(&features_json)
+                .map_err(|e| format!("Invalid features JSON: {e}"))?
+        };
 
         if features.is_empty() {
             return Err("features_json must contain at least one row".into());
@@ -164,5 +174,44 @@ mod tests {
         let m = global_registry().get("btest_lin").unwrap();
         let p1 = m.predict(&[3.0, 3.0]).unwrap();
         assert!(p1.is_finite(), "btest_lin: {p1}");
+    }
+
+    #[test]
+    fn test_predict_batch_at_syntax() {
+        // Verify @model_name syntax: cache dataset → retrieve via @btest_at
+        let x = vec![
+            vec![1.0, 2.0],
+            vec![2.0, 1.0],
+            vec![3.0, 4.0],
+            vec![4.0, 3.0],
+            vec![5.0, 6.0],
+            vec![6.0, 5.0],
+        ];
+        let y: Vec<f64> = x.iter().map(|xi| 3.0 * xi[0] + 2.0 * xi[1] + 1.0).collect();
+
+        let result = train::train(
+            crate::model::Algorithm::LinearRegression,
+            &x,
+            &y,
+            &std::collections::HashMap::new(),
+        )
+        .unwrap();
+
+        let model = crate::model::linear::LinearModel::new(
+            result.coefficients,
+            result.num_samples,
+            result.r_squared,
+            result.mse,
+            0.0,
+        );
+        global_registry().insert("btest_at".into(), Arc::new(model));
+
+        // Cache the dataset (simulating what ml_train does)
+        global_registry().cache_dataset("btest_at", x.clone());
+
+        // Retrieve via @ syntax
+        let cached = global_registry().get_dataset("btest_at").unwrap();
+        assert_eq!(cached.len(), 6);
+        assert_eq!(cached[0], vec![1.0, 2.0]);
     }
 }
