@@ -164,6 +164,107 @@ impl VTab for SnapshotFn {
     }
 }
 
+// ── ml_list_snapshots: query existing snapshots ──
+
+#[repr(C)]
+pub struct LSInitData {
+    done: AtomicBool,
+}
+
+pub struct ListSnapshotsFn;
+
+impl VTab for ListSnapshotsFn {
+    type BindData = Vec<DataSnapshot>;
+    type InitData = LSInitData;
+
+    fn bind(bind: &BindInfo) -> Result<Self::BindData, Box<dyn Error>> {
+        let n_params = bind.get_parameter_count();
+        let model_name: String = if n_params >= 1 {
+            bind.get_parameter(0).to_string()
+        } else {
+            return Err("ml_list_snapshots requires: model_name".into());
+        };
+
+        bind.add_result_column(
+            "model_name",
+            LogicalTypeHandle::from(LogicalTypeId::Varchar),
+        );
+        bind.add_result_column(
+            "relation_name",
+            LogicalTypeHandle::from(LogicalTypeId::Varchar),
+        );
+        bind.add_result_column(
+            "n_features",
+            LogicalTypeHandle::from(LogicalTypeId::Integer),
+        );
+        bind.add_result_column("n_samples", LogicalTypeHandle::from(LogicalTypeId::Integer));
+        bind.add_result_column(
+            "target_column",
+            LogicalTypeHandle::from(LogicalTypeId::Varchar),
+        );
+        bind.add_result_column("data_hash", LogicalTypeHandle::from(LogicalTypeId::Varchar));
+
+        Ok(global_registry().list_snapshots(&model_name))
+    }
+
+    fn init(_: &InitInfo) -> Result<Self::InitData, Box<dyn Error>> {
+        Ok(LSInitData {
+            done: AtomicBool::new(false),
+        })
+    }
+
+    fn func(
+        func: &TableFunctionInfo<Self>,
+        output: &mut DataChunkHandle,
+    ) -> Result<(), Box<dyn Error>> {
+        let init = func.get_init_data();
+        if init.done.load(Ordering::Relaxed) {
+            output.set_len(0);
+            return Ok(());
+        }
+        let bind = func.get_bind_data();
+
+        use arrow::array::{Int32Array, StringArray};
+        use arrow::datatypes::{DataType, Field, Schema};
+        use arrow::record_batch::RecordBatch;
+
+        let schema = StdArc::new(Schema::new(vec![
+            Field::new("model_name", DataType::Utf8, false),
+            Field::new("relation_name", DataType::Utf8, false),
+            Field::new("n_features", DataType::Int32, false),
+            Field::new("n_samples", DataType::Int32, false),
+            Field::new("target_column", DataType::Utf8, false),
+            Field::new("data_hash", DataType::Utf8, false),
+        ]));
+
+        let names: Vec<&str> = bind.iter().map(|s| s.model_name.as_str()).collect();
+        let relations: Vec<&str> = bind.iter().map(|s| s.relation_name.as_str()).collect();
+        let nfs: Vec<i32> = bind.iter().map(|s| s.n_features as i32).collect();
+        let nss: Vec<i32> = bind.iter().map(|s| s.n_samples as i32).collect();
+        let targets: Vec<&str> = bind.iter().map(|s| s.target_column.as_str()).collect();
+        let hashes: Vec<&str> = bind.iter().map(|s| s.data_hash.as_str()).collect();
+
+        let batch = RecordBatch::try_new(
+            schema,
+            vec![
+                StdArc::new(StringArray::from(names)),
+                StdArc::new(StringArray::from(relations)),
+                StdArc::new(Int32Array::from(nfs)),
+                StdArc::new(Int32Array::from(nss)),
+                StdArc::new(StringArray::from(targets)),
+                StdArc::new(StringArray::from(hashes)),
+            ],
+        )?;
+        record_batch_to_duckdb_data_chunk(&batch, output)?;
+        init.done.store(true, Ordering::Relaxed);
+        Ok(())
+    }
+
+    fn parameters() -> Option<Vec<LogicalTypeHandle>> {
+        None
+    }
+}
+
 /// Compute a SHA-256 hash of training data for snapshot identification.
 /// Compute a SHA-256 hash of training data for snapshot identification.
 pub fn hash_training_data(x: &[Vec<f64>], y: &[f64]) -> String {

@@ -34,6 +34,7 @@ pub unsafe fn ml_init(con: Connection) -> Result<(), Box<dyn Error>> {
 
     // v0.13: data version tracking
     con.register_table_function::<snapshot::SnapshotFn>("ml_snapshot")?;
+    con.register_table_function::<snapshot::ListSnapshotsFn>("ml_list_snapshots")?;
 
     log::info!("duckdb_ml initialized successfully");
     Ok(())
