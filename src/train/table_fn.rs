@@ -258,6 +258,13 @@ fn register_from_blob(
         Algorithm::KNNRegressor | Algorithm::KNNClassifier => {
             Arc::new(KnnMlModel::deserialize(blob)?)
         }
+        Algorithm::XGBoostRegression | Algorithm::XGBoostBinary => {
+            // GBDT models are serialized as XGBoost JSON
+            use crate::model::xgboost::XgbModelWrapper;
+            let model = XgbModelWrapper::new(blob.to_vec())
+                .map_err(|e| format!("GBDT deserialize: {e:?}"))?;
+            return Ok(Arc::new(model));
+        }
         Algorithm::NaiveBayes => Arc::new(NbMlModel::deserialize(blob)?),
         Algorithm::PCA => Arc::new(PcaMlModel::deserialize(blob)?),
         Algorithm::XGBoostRegressor | Algorithm::XGBoostClassifier | Algorithm::Onnx => {

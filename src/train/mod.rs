@@ -1,3 +1,4 @@
+pub mod gbdt;
 pub mod kmeans;
 pub mod linear;
 pub mod logistic;
@@ -35,6 +36,31 @@ pub fn train(
             let lr = params.get("lr").copied().unwrap_or(0.01);
             let epochs = params.get("epochs").copied().unwrap_or(100.0) as usize;
             logistic::train(x, y, lr, epochs)
+        }
+        Algorithm::XGBoostRegression | Algorithm::XGBoostBinary => {
+            let n_estimators = params.get("n_estimators").copied().unwrap_or(100.0) as usize;
+            let learning_rate = params.get("learning_rate").copied().unwrap_or(0.1);
+            let max_depth = params.get("max_depth").copied().unwrap_or(6.0) as usize;
+            let subsample = params.get("subsample").copied().unwrap_or(1.0);
+            let gp = gbdt::GbdtParams {
+                n_estimators,
+                learning_rate,
+                max_depth,
+                subsample,
+                ..Default::default()
+            };
+            let ensemble = gbdt::train_gbdt(x, y, &gp);
+            let r2 = ensemble.r_squared(x, y);
+            let mse_val = ensemble.mse(x, y);
+            let json = ensemble.to_xgb_json();
+            Ok(TrainingResult {
+                coefficients: vec![],
+                intercept: ensemble.initial_prediction,
+                r_squared: Some(r2),
+                mse: Some(mse_val),
+                num_samples: x.len(),
+                model_blob: Some(json.into_bytes()),
+            })
         }
         Algorithm::DecisionTreeRegressor => {
             let max_depth = params.get("max_depth").copied().unwrap_or(10.0) as usize;
@@ -90,10 +116,14 @@ pub fn train(
             "ONNX models cannot be trained in DuckDB. Train in Python and load via ml_load_onnx()."
                 .into(),
         ),
-        Algorithm::XGBoostRegressor | Algorithm::XGBoostClassifier => Err(
-            "XGBoost models cannot be trained in DuckDB. Train in Python and load the JSON model."
-                .into(),
-        ),
+        Algorithm::XGBoostRegressor | Algorithm::XGBoostClassifier => {
+            // v0.9 compat: external model loading via ml_load_xgboost
+            // For training, use xgboost_regression or xgboost_binary
+            Err(
+                "XGBoost models trained outside DuckDB. Use 'xgboost_regression' or 'xgboost_binary' for in-DB training."
+                    .into(),
+            )
+        }
         Algorithm::KMeans => {
             let k = params.get("k").copied().unwrap_or(3.0) as usize;
             let max_iters = params.get("max_iters").copied().unwrap_or(100.0) as usize;
