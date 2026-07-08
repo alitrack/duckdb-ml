@@ -73,7 +73,9 @@ pub fn train(
                 max_features: None,
             };
             let tree_node = tree::build_tree(x, y, &tp);
-            let blob = tree_node.to_bytes();
+            let mut blob = Vec::new();
+            blob.extend_from_slice(&(x[0].len() as u32).to_le_bytes());
+            blob.extend_from_slice(&tree_node.to_bytes());
             Ok(TrainingResult {
                 coefficients: vec![],
                 intercept: 0.0,
@@ -95,6 +97,8 @@ pub fn train(
             let forest = tree::RandomForest::train(x, y, n_estimators, &tp);
             // Serialize forest
             let mut buf = Vec::new();
+            // Header: num_features (4 bytes)
+            buf.extend_from_slice(&(x[0].len() as u32).to_le_bytes());
             let count = forest.trees.len() as u32;
             buf.extend_from_slice(&count.to_le_bytes());
             for t in &forest.trees {

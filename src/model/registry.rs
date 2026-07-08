@@ -9,9 +9,21 @@ struct CacheEntry {
     last_used: Instant,
 }
 
-/// Thread-safe model registry with LRU caching
+/// Deployment state for a model name
+#[derive(Debug, Clone)]
+pub struct Deployment {
+    pub model_key: String,
+    pub strategy: String,
+    pub deployed_at: Instant,
+}
+
+/// Thread-safe model registry with LRU caching and deployment tracking
 pub struct ModelRegistry {
     models: RwLock<HashMap<String, CacheEntry>>,
+    /// model_name -> current deployment
+    deployments: RwLock<HashMap<String, Deployment>>,
+    /// model_name -> previous deployments (for rollback)
+    deployment_history: RwLock<HashMap<String, Vec<Deployment>>>,
     max_cached: usize,
 }
 
@@ -19,6 +31,8 @@ impl ModelRegistry {
     pub fn new(max_cached: usize) -> Self {
         Self {
             models: RwLock::new(HashMap::new()),
+            deployments: RwLock::new(HashMap::new()),
+            deployment_history: RwLock::new(HashMap::new()),
             max_cached,
         }
     }
@@ -38,7 +52,6 @@ impl ModelRegistry {
     pub fn insert(&self, name: String, model: Arc<dyn MlModel>) {
         let mut models = self.models.write().unwrap();
 
-        // Evict LRU if at capacity
         if models.len() >= self.max_cached && !models.contains_key(&name) {
             let oldest = models
                 .iter()
@@ -46,7 +59,6 @@ impl ModelRegistry {
                 .map(|(k, _)| k.clone());
             if let Some(key) = oldest {
                 models.remove(&key);
-                log::debug!("LRU evicted model: {}", key);
             }
         }
 
@@ -79,11 +91,132 @@ impl ModelRegistry {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    // ── Deployment management ──
+
+    /// Deploy a model with a strategy.
+    /// - "best_score": pick the model with the highest r_squared across all keys matching `name_*`
+    /// - "most_recent": use the exact model_key
+    /// - "rollback": restore the previous deployment
+    /// - "specific": the model_key is the exact key
+    pub fn deploy(
+        &self,
+        model_name: &str,
+        strategy: &str,
+        model_key: &str,
+    ) -> Result<Deployment, String> {
+        let actual_key = match strategy {
+            "best_score" => {
+                // Find the key with highest r_squared among models matching the prefix
+                let models = self.models.read().unwrap();
+                let prefix = format!("{model_name}_");
+                let mut best_key = None;
+                let mut best_r2 = f64::NEG_INFINITY;
+                for key in models.keys() {
+                    if (key == model_name || key.starts_with(&prefix))
+                        && let Some(entry) = models.get(key)
+                    {
+                        let r2 = entry
+                            .model
+                            .metadata()
+                            .r_squared
+                            .unwrap_or(f64::NEG_INFINITY);
+                        if r2 > best_r2 {
+                            best_r2 = r2;
+                            best_key = Some(key.clone());
+                        }
+                    }
+                }
+                best_key
+                    .ok_or_else(|| format!("No model found for '{model_name}' with best_score"))?
+            }
+            "most_recent" => model_key.to_string(),
+            "rollback" => {
+                let hist = self.deployment_history.read().unwrap();
+                let history = hist
+                    .get(model_name)
+                    .ok_or("No deployment history for rollback")?;
+                if history.len() < 2 {
+                    return Err("Need at least 2 deployments to rollback".into());
+                }
+                history[history.len() - 2].model_key.clone()
+            }
+            _ => model_key.to_string(),
+        };
+
+        // Verify model exists
+        if self.get(&actual_key).is_none() {
+            return Err(format!("Model '{actual_key}' not found in registry"));
+        }
+
+        let deployment = Deployment {
+            model_key: actual_key.clone(),
+            strategy: strategy.to_string(),
+            deployed_at: Instant::now(),
+        };
+
+        // Save current deployment to history before replacing
+        {
+            let mut deps = self.deployments.write().unwrap();
+            if let Some(old) = deps.get(model_name) {
+                self.deployment_history
+                    .write()
+                    .unwrap()
+                    .entry(model_name.to_string())
+                    .or_default()
+                    .push(old.clone());
+            }
+            deps.insert(model_name.to_string(), deployment.clone());
+        }
+
+        Ok(deployment)
+    }
+
+    /// Get the currently deployed model key for a model name
+    pub fn get_deployed(&self, model_name: &str) -> Option<String> {
+        self.deployments
+            .read()
+            .unwrap()
+            .get(model_name)
+            .map(|d| d.model_key.clone())
+    }
+
+    /// Get deployment info
+    pub fn get_deployment_info(&self) -> Vec<(String, String, String)> {
+        self.deployments
+            .read()
+            .unwrap()
+            .iter()
+            .map(|(name, dep)| {
+                let algo = self
+                    .models
+                    .read()
+                    .unwrap()
+                    .get(&dep.model_key)
+                    .map(|e| e.model.algorithm().to_string())
+                    .unwrap_or_default();
+                (name.clone(), dep.model_key.clone(), algo)
+            })
+            .collect()
+    }
+
+    /// Get the model for the currently deployed version of a name.
+    /// Falls back to exact name lookup if no deployment exists.
+    pub fn get_deployed_model(&self, model_name: &str) -> Option<Arc<dyn MlModel>> {
+        // Try deployment first
+        if let Some(key) = self.get_deployed(model_name)
+            && let Some(m) = self.get(&key)
+        {
+            return Some(m);
+        }
+        // Fall back to exact name
+        self.get(model_name)
+    }
 }
 
-/// Global registry singleton
+/// Global registry singleton (max 100 models)
 static REGISTRY: std::sync::LazyLock<ModelRegistry> =
-    std::sync::LazyLock::new(|| ModelRegistry::new(10));
+    std::sync::LazyLock::new(|| ModelRegistry::new(100));
 
 pub fn global_registry() -> &'static ModelRegistry {
     &REGISTRY
