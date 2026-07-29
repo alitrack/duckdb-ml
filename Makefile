@@ -1,27 +1,26 @@
-.PHONY: build release package clean test verify
+.PHONY: clean clean_all
 
-build:
-	cargo build
+PROJ_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
-release:
-	cargo build --release
-	python3 scripts/package_extension.py
+EXTENSION_NAME=ml
+USE_UNSTABLE_C_API=0
+TARGET_DUCKDB_VERSION=v1.5.4
 
-verify:
-	python3 scripts/verify_extension.py
+SKIP_TESTS=1
 
-package: build
-	python3 scripts/package_extension.py
+all: configure debug
 
-test:
-	cargo test --lib
+include extension-ci-tools/makefiles/c_api_extensions/base.Makefile
+include extension-ci-tools/makefiles/c_api_extensions/rust.Makefile
 
-clippy:
-	cargo clippy -- -D warnings
+configure: venv platform extension_version
 
-all: clippy test release verify
-	@echo "✅ All checks passed"
+debug: build_extension_library_debug build_extension_with_metadata_debug
+release: build_extension_library_release build_extension_with_metadata_release
 
-clean:
-	cargo clean
-	rm -f target/duckdb_ml.duckdb_extension
+test: test_debug
+test_debug: test_extension_debug
+test_release: test_extension_release
+
+clean: clean_build clean_rust
+clean_all: clean_configure clean

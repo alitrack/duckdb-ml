@@ -1,7 +1,7 @@
 [package]
 name = "duckdb-ml"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 license = "MIT"
 description = "Lightweight, columnar-native, train+inference DuckDB machine learning extension"
 
@@ -24,6 +24,7 @@ default = []
 onnx = ["dep:ort"]
 
 [lib]
+name = "ml"
 crate-type = ["cdylib", "rlib"]
 
 [profile.release]

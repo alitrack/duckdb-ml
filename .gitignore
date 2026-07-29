@@ -1,5 +1,6 @@
 /target/
-/openspec/
+/build/
+/configure/
 *.duckdb_extension
 *.so
 *.dylib
