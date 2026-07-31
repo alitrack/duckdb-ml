@@ -59,102 +59,8 @@ impl VTab for TrainFn {
             "{}".into()
         };
 
-        let algorithm = Algorithm::parse_algorithm(&algorithm_str)
-            .ok_or_else(|| format!("Unknown algorithm: '{algorithm_str}'. Available: linear_regression, ridge_regression, logistic_regression, decision_tree, random_forest, kmeans, knn_regressor, knn_classifier, naive_bayes, pca"))?;
-
-        // Parse target array
-        let y: Vec<f64> =
-            serde_json::from_str(&target_json).map_err(|e| format!("Invalid target JSON: {e}"))?;
-
-        // Parse features matrix
-        let x: Vec<Vec<f64>> = serde_json::from_str(&features_json)
-            .map_err(|e| format!("Invalid features JSON: {e}"))?;
-
-        if x.is_empty() || y.is_empty() {
-            return Err("Training data is empty".into());
-        }
-        if x.len() != y.len() {
-            return Err(format!(
-                "Sample count mismatch: {} features rows vs {} target values",
-                x.len(),
-                y.len()
-            )
-            .into());
-        }
-        let n_features = x[0].len();
-        if !x.iter().all(|row| row.len() == n_features) {
-            return Err("Features rows have inconsistent column counts".into());
-        }
-
-        // Parse params
-        let params: HashMap<String, f64> = if params_json.trim().is_empty() || params_json == "{}" {
-            HashMap::new()
-        } else {
-            serde_json::from_str(&params_json).map_err(|e| format!("Invalid params JSON: {e}"))?
-        };
-
-        let n_samples = x.len();
-        let n_feat = n_features;
-
-        let result = train::train(algorithm, &x, &y, &params)?;
-
-        // Build hyperparameters JSON
-        let mut hp = String::from("{");
-        let mut first = true;
-        for (k, v) in &params {
-            if !first {
-                hp.push_str(", ");
-            }
-            let _ = write!(hp, "\"{k}\": {v}");
-            first = false;
-        }
-        hp.push('}');
-
-        // Serialize and store model blob → load as MlModel → register
-        if let Some(ref blob) = result.model_blob {
-            // Create MlModel from blob and register
-            let registered = register_from_blob(algorithm, n_feat, n_samples, &params, blob);
-            if let Ok(arc_model) = registered {
-                global_registry().insert(model_name.clone(), arc_model);
-            }
-        } else {
-            // Linear/logistic/lasso models: construct MlModel directly
-            use crate::model::{lasso::LassoModel, linear::LinearModel, logistic::LogisticModel};
-            let lambda = params.get("lambda").copied().unwrap_or(0.0);
-            let model: Arc<dyn crate::model::MlModel> = match algorithm {
-                Algorithm::LinearRegression | Algorithm::RidgeRegression => {
-                    Arc::new(LinearModel::new(
-                        result.coefficients,
-                        n_samples,
-                        result.r_squared,
-                        result.mse,
-                        lambda,
-                    ))
-                }
-                Algorithm::LogisticRegression => Arc::new(LogisticModel::new(
-                    result.coefficients,
-                    n_samples,
-                    result.r_squared,
-                )),
-                Algorithm::LassoRegression => {
-                    let l = params.get("lambda").copied().unwrap_or(0.1);
-                    Arc::new(LassoModel::new(
-                        result.coefficients,
-                        n_samples,
-                        result.r_squared,
-                        result.mse,
-                        l,
-                    ))
-                }
-                _ => {
-                    return Err("Linear training result for non-linear algorithm".into());
-                }
-            };
-            global_registry().insert(model_name.clone(), model);
-        }
-
-        // Cache features for batch prediction via @model_name syntax
-        global_registry().cache_dataset(&model_name, x.clone());
+        let (model_name, algorithm_str, r_squared, mse, n_samples, n_feat) =
+            train_and_register(&model_name, &algorithm_str, &target_json, &features_json, &params_json)?;
 
         bind.add_result_column(
             "model_name",
@@ -172,14 +78,14 @@ impl VTab for TrainFn {
         Ok(TBindData {
             model_name,
             algorithm: algorithm_str,
-            r_squared: result.r_squared,
-            mse: result.mse,
+            r_squared,
+            mse,
             n_samples,
             n_features: n_feat,
         })
     }
 
-    fn init(_: &InitInfo) -> Result<Self::InitData, Box<dyn Error>> {
+fn init(_: &InitInfo) -> Result<Self::InitData, Box<dyn Error>> {
         Ok(TInitData {
             done: AtomicBool::new(false),
         })
@@ -234,6 +140,105 @@ impl VTab for TrainFn {
             LogicalTypeHandle::from(LogicalTypeId::Varchar),
         ])
     }
+}
+
+/// Shared training pipeline used by both the ml_train table function and the
+/// ml_train_model scalar function (DuckFlow pipeline SQL).
+/// Returns (model_name, algorithm, r_squared, mse, n_samples, n_features).
+pub fn train_and_register(
+    model_name: &str,
+    algorithm_str: &str,
+    target_json: &str,
+    features_json: &str,
+    params_json: &str,
+) -> Result<(String, String, Option<f64>, Option<f64>, usize, usize), Box<dyn Error>> {
+    use crate::train;
+
+    let algorithm = Algorithm::parse_algorithm(algorithm_str).ok_or_else(|| {
+        format!("Unknown algorithm: '{algorithm_str}'. Available: linear_regression, ridge_regression, logistic_regression, decision_tree, random_forest, kmeans, knn_regressor, knn_classifier, naive_bayes, pca")
+    })?;
+
+    let y: Vec<f64> =
+        serde_json::from_str(target_json).map_err(|e| format!("Invalid target JSON: {e}"))?;
+    let x: Vec<Vec<f64>> = serde_json::from_str(features_json)
+        .map_err(|e| format!("Invalid features JSON: {e}"))?;
+
+    if x.is_empty() || y.is_empty() {
+        return Err("Training data is empty".into());
+    }
+    if x.len() != y.len() {
+        return Err(format!(
+            "Sample count mismatch: {} features rows vs {} target values",
+            x.len(),
+            y.len()
+        )
+        .into());
+    }
+    let n_features = x[0].len();
+    if !x.iter().all(|row| row.len() == n_features) {
+        return Err("Features rows have inconsistent column counts".into());
+    }
+
+    let params: HashMap<String, f64> = if params_json.trim().is_empty() || params_json == "{}" {
+        HashMap::new()
+    } else {
+        serde_json::from_str(params_json).map_err(|e| format!("Invalid params JSON: {e}"))?
+    };
+
+    let n_samples = x.len();
+    let n_feat = n_features;
+    let result = train::train(algorithm, &x, &y, &params)?;
+
+    if let Some(ref blob) = result.model_blob {
+        let registered = register_from_blob(algorithm, n_feat, n_samples, &params, blob);
+        if let Ok(arc_model) = registered {
+            global_registry().insert(model_name.to_string(), arc_model);
+        }
+    } else {
+        use crate::model::{lasso::LassoModel, linear::LinearModel, logistic::LogisticModel};
+        let lambda = params.get("lambda").copied().unwrap_or(0.0);
+        let model: Arc<dyn crate::model::MlModel> = match algorithm {
+            Algorithm::LinearRegression | Algorithm::RidgeRegression => {
+                Arc::new(LinearModel::new(
+                    result.coefficients,
+                    n_samples,
+                    result.r_squared,
+                    result.mse,
+                    lambda,
+                ))
+            }
+            Algorithm::LogisticRegression => Arc::new(LogisticModel::new(
+                result.coefficients,
+                n_samples,
+                result.r_squared,
+            )),
+            Algorithm::LassoRegression => {
+                let l = params.get("lambda").copied().unwrap_or(0.1);
+                Arc::new(LassoModel::new(
+                    result.coefficients,
+                    n_samples,
+                    result.r_squared,
+                    result.mse,
+                    l,
+                ))
+            }
+            _ => {
+                return Err("Linear training result for non-linear algorithm".into());
+            }
+        };
+        global_registry().insert(model_name.to_string(), model);
+    }
+
+    global_registry().cache_dataset(model_name, x);
+
+    Ok((
+        model_name.to_string(),
+        algorithm_str.to_string(),
+        result.r_squared,
+        result.mse,
+        n_samples,
+        n_feat,
+    ))
 }
 
 /// Deserialize a blob into an MlModel and return as Arc

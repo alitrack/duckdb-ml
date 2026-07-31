@@ -3,6 +3,7 @@ pub mod deploy;
 pub mod load;
 pub mod model;
 pub mod predict;
+pub mod scalar;
 pub mod snapshot;
 pub mod storage;
 pub mod train;
@@ -35,6 +36,11 @@ pub unsafe fn ml_init(con: Connection) -> Result<(), Box<dyn Error>> {
     // v0.13: data version tracking
     con.register_table_function::<snapshot::SnapshotFn>("ml_snapshot")?;
     con.register_table_function::<snapshot::ListSnapshotsFn>("ml_list_snapshots")?;
+
+    // Scalar variants — subquery-friendly params for pipeline SQL (DuckFlow).
+    // Table-function params can't contain subqueries; scalar params can.
+    con.register_scalar_function::<scalar::TrainModelFn>("ml_train_model")?;
+    con.register_scalar_function::<scalar::PredictBatchValueFn>("ml_predict_batch_value")?;
 
     log::info!("duckdb_ml initialized successfully");
     Ok(())

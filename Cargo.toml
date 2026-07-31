@@ -6,7 +6,7 @@ license = "MIT"
 description = "Lightweight, columnar-native, train+inference DuckDB machine learning extension"
 
 [dependencies]
-duckdb = { version = "~1.10504.0", features = ["loadable-extension", "vtab-arrow"] }
+duckdb = { version = "~1.10504.0", features = ["loadable-extension", "vtab-arrow", "vscalar", "vscalar-arrow"] }
 arrow = "58"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
