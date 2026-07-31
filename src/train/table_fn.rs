@@ -226,7 +226,13 @@ impl VTab for TrainFn {
     }
 
     fn parameters() -> Option<Vec<LogicalTypeHandle>> {
-        None
+        Some(vec![
+            LogicalTypeHandle::from(LogicalTypeId::Varchar),
+            LogicalTypeHandle::from(LogicalTypeId::Varchar),
+            LogicalTypeHandle::from(LogicalTypeId::Varchar),
+            LogicalTypeHandle::from(LogicalTypeId::Varchar),
+            LogicalTypeHandle::from(LogicalTypeId::Varchar),
+        ])
     }
 }
 

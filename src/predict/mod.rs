@@ -1,5 +1,5 @@
 //! Predict via DuckDB table function
-//! Usage: SELECT * FROM ml_predict('model_name', val1, val2, ...)
+//! Usage: SELECT * FROM ml_predict('model_name', '[1.0, 2.0]')
 
 pub mod batch;
 
@@ -34,14 +34,13 @@ impl VTab for PredictFn {
     fn bind(bind: &BindInfo) -> Result<Self::BindData, Box<dyn Error>> {
         let n_params = bind.get_parameter_count();
         if n_params < 2 {
-            return Err("ml_predict requires model_name and feature values".into());
+            return Err("ml_predict requires model_name and features_json (e.g. '[1.0,2.0]')".into());
         }
 
         let model_name: String = bind.get_parameter(0).to_string();
-        let mut features = Vec::with_capacity((n_params - 1) as usize);
-        for i in 1..n_params {
-            features.push(bind.get_parameter(i).to_string().parse::<f64>()?);
-        }
+        let features_json: String = bind.get_parameter(1).to_string();
+        let features: Vec<f64> = serde_json::from_str(&features_json)
+            .map_err(|e| format!("Invalid features JSON '{features_json}': {e}"))?;
 
         // Try global registry first, fall back to storage
         let model = global_registry()
@@ -92,6 +91,9 @@ impl VTab for PredictFn {
     }
 
     fn parameters() -> Option<Vec<LogicalTypeHandle>> {
-        None
+        Some(vec![
+            LogicalTypeHandle::from(LogicalTypeId::Varchar),
+            LogicalTypeHandle::from(LogicalTypeId::Varchar),
+        ])
     }
 }

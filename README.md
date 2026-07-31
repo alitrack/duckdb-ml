@@ -8,7 +8,7 @@ Zero Python dependencies. 18 algorithms in pure Rust.
 SELECT * FROM ml_train('my_model', 'random_forest', '[..]', '[[..]]', '{"n_estimators":100}');
 
 -- Predict (single)
-SELECT ml_predict('my_model', 3.0, 4.5);
+SELECT * FROM ml_predict('my_model', '[3.0, 4.5]');
 
 -- Predict (batch)
 SELECT * FROM ml_predict_batch('my_model', '[[1.0,2.0],[3.0,4.0]]');
