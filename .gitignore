@@ -5,3 +5,7 @@
 *.so
 *.dylib
 *.dll
+
+# Local-only content (user decides if/when to publish)
+/articles/
+/openspec/
