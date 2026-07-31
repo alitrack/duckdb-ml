@@ -84,7 +84,23 @@ impl VArrowScalar for PredictBatchValueFn {
         for row in &x {
             preds.push(arc_model.predict(row)?);
         }
-        let json = serde_json::to_string(&preds)?;
+        // Decode ordinal encodings back to original class labels (string targets);
+        // numeric targets pass through as-is.
+        let json = if let Some(labels) = crate::model::global_registry().label_map_for(model) {
+            let decoded: Vec<String> = preds
+                .iter()
+                .map(|&p| {
+                    let idx = p.round() as usize;
+                    labels
+                        .get(idx)
+                        .cloned()
+                        .unwrap_or_else(|| p.to_string())
+                })
+                .collect();
+            serde_json::to_string(&decoded)?
+        } else {
+            serde_json::to_string(&preds)?
+        };
 
         let out = StringArray::from(vec![Some(json); n]);
         Ok(Arc::new(out))

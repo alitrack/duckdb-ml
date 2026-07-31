@@ -158,8 +158,26 @@ pub fn train_and_register(
         format!("Unknown algorithm: '{algorithm_str}'. Available: linear_regression, ridge_regression, logistic_regression, decision_tree, random_forest, kmeans, knn_regressor, knn_classifier, naive_bayes, pca")
     })?;
 
-    let y: Vec<f64> =
-        serde_json::from_str(target_json).map_err(|e| format!("Invalid target JSON: {e}"))?;
+    let y: Vec<f64> = match serde_json::from_str::<Vec<f64>>(target_json) {
+        Ok(v) => v,
+        Err(_) => {
+            // String class labels → ordinal encoding, mapping stored on the model
+            // so predictions can be decoded back to the original labels.
+            let labels: Vec<String> = serde_json::from_str(target_json)
+                .map_err(|e| format!("Invalid target JSON (numeric or string array): {e}"))?;
+            if labels.is_empty() {
+                return Err("Training data is empty".into());
+            }
+            let mut unique = labels.clone();
+            unique.sort();
+            unique.dedup();
+            global_registry().insert_label_map(model_name, unique.clone());
+            labels
+                .iter()
+                .map(|l| unique.iter().position(|u| u == l).unwrap() as f64)
+                .collect()
+        }
+    };
     let x: Vec<Vec<f64>> = serde_json::from_str(features_json)
         .map_err(|e| format!("Invalid features JSON: {e}"))?;
 

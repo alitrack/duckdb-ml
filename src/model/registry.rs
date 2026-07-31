@@ -28,6 +28,9 @@ pub struct ModelRegistry {
     snapshots: RwLock<Vec<DataSnapshot>>,
     /// Cached training datasets: name -> features for batch prediction
     datasets: RwLock<HashMap<String, Vec<Vec<f64>>>>,
+    /// model_name -> class labels (ordinal encoding map for string targets).
+    /// Predictions are decoded back to these labels when present.
+    label_maps: RwLock<HashMap<String, Vec<String>>>,
     max_cached: usize,
 }
 
@@ -51,8 +54,19 @@ impl ModelRegistry {
             deployment_history: RwLock::new(HashMap::new()),
             snapshots: RwLock::new(Vec::new()),
             datasets: RwLock::new(HashMap::new()),
+            label_maps: RwLock::new(HashMap::new()),
             max_cached,
         }
+    }
+
+    /// Record the ordinal encoding map for a string-target model.
+    pub fn insert_label_map(&self, name: &str, labels: Vec<String>) {
+        self.label_maps.write().unwrap().insert(name.to_string(), labels);
+    }
+
+    /// Class labels for a model (None for numeric targets).
+    pub fn label_map_for(&self, name: &str) -> Option<Vec<String>> {
+        self.label_maps.read().unwrap().get(name).cloned()
     }
 
     /// Get a model from cache or return None
