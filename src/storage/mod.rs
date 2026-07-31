@@ -4,6 +4,9 @@ use std::error::Error;
 /// Create/upgrade duckdb_ml management tables.
 /// Idempotent — skips if table/column already exists.
 pub fn ensure_tables(con: &Connection) -> Result<(), Box<dyn Error>> {
+    // Management schema must exist before any duckdb_ml.* table
+    con.execute_batch("CREATE SCHEMA IF NOT EXISTS duckdb_ml;")?;
+
     // ── v0.9 compat: original models table (kept for backward compat) ──
     con.execute_batch(
         "
@@ -47,7 +50,7 @@ pub fn ensure_tables(con: &Connection) -> Result<(), Box<dyn Error>> {
             n_features INTEGER NOT NULL,
             n_samples INTEGER NOT NULL,
             target_column TEXT,
-            feature_columns JSONB,
+            feature_columns JSON,
             data_hash TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
