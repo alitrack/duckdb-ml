@@ -10,7 +10,7 @@ pub mod train;
 
 mod api;
 
-use duckdb::{Connection, Result, duckdb_entrypoint_c_api};
+use duckdb::{duckdb_entrypoint_c_api, Connection, Result};
 use std::error::Error;
 
 #[duckdb_entrypoint_c_api(ext_name = "ml")]
@@ -41,6 +41,7 @@ pub unsafe fn ml_init(con: Connection) -> Result<(), Box<dyn Error>> {
     // Table-function params can't contain subqueries; scalar params can.
     con.register_scalar_function::<scalar::TrainModelFn>("ml_train_model")?;
     con.register_scalar_function::<scalar::PredictBatchValueFn>("ml_predict_batch_value")?;
+    con.register_scalar_function::<scalar::OlsFn>("ml_ols")?;
 
     log::info!("duckdb_ml initialized successfully");
     Ok(())
@@ -48,7 +49,7 @@ pub unsafe fn ml_init(con: Connection) -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod e2e_tests {
-    use crate::model::{Algorithm, MlModel, global_registry};
+    use crate::model::{global_registry, Algorithm, MlModel};
     use crate::train;
     use std::sync::Arc;
 

@@ -91,10 +91,7 @@ impl VArrowScalar for PredictBatchValueFn {
                 .iter()
                 .map(|&p| {
                     let idx = p.round() as usize;
-                    labels
-                        .get(idx)
-                        .cloned()
-                        .unwrap_or_else(|| p.to_string())
+                    labels.get(idx).cloned().unwrap_or_else(|| p.to_string())
                 })
                 .collect();
             serde_json::to_string(&decoded)?
@@ -111,5 +108,152 @@ impl VArrowScalar for PredictBatchValueFn {
             vec![DataType::Utf8, DataType::Utf8],
             DataType::Utf8,
         )]
+    }
+}
+
+/// ml_ols(y_json, x1_json, x2_json, ...) → VARCHAR
+/// Multivariate OLS fit over JSON column arrays — the vscalar equivalent of a
+/// regression aggregate. Callers collect columns with the built-in `list()`
+/// aggregate and pass them as JSON (subqueries are allowed in scalar-function
+/// arguments, so this works over any table):
+///
+///   SELECT ml_ols(
+///       (SELECT to_json(list("y"))  FROM t),
+///       (SELECT to_json(list("x1")) FROM t),
+///       (SELECT to_json(list("x2")) FROM t));
+///
+/// Returns a JSON object:
+///   {"coefficients":[b1,b2,...], "intercept":b0, "r_squared":.., "mse":..,
+///    "n_samples":N, "n_features":K}
+pub struct OlsFn;
+
+fn parse_f64_json(s: &str) -> Result<Vec<f64>, Box<dyn Error>> {
+    serde_json::from_str(s).map_err(|e| format!("Invalid JSON array '{s}': {e}").into())
+}
+
+/// Shared logic — takes the raw JSON string args (col 0 = y, rest = feature
+/// columns), transposes to rows, fits OLS, returns the JSON result string.
+pub fn ols_from_json(args: &[&str]) -> Result<String, Box<dyn Error>> {
+    if args.len() < 2 {
+        return Err("ml_ols requires at least 2 arguments: y, x1[, x2, ...]".into());
+    }
+    let y = parse_f64_json(args[0])?;
+    let n = y.len();
+    if n == 0 {
+        return Err("ml_ols: empty target array".into());
+    }
+    let n_features = args.len() - 1;
+    let mut cols: Vec<Vec<f64>> = Vec::with_capacity(n_features);
+    for (i, arg) in args.iter().enumerate().skip(1) {
+        let col = parse_f64_json(arg)?;
+        if col.len() != n {
+            return Err(format!(
+                "ml_ols length mismatch: y has {n} samples, x{} has {}",
+                i,
+                col.len()
+            )
+            .into());
+        }
+        cols.push(col);
+    }
+    // Column-major → row-major for the trainer
+    let rows: Vec<Vec<f64>> = (0..n)
+        .map(|r| cols.iter().map(|c| c[r]).collect())
+        .collect();
+
+    let result = crate::train::linear::train(&rows, &y, 0.0)?;
+    let n_coeffs = result.coefficients.len();
+    let json = serde_json::json!({
+        "coefficients": &result.coefficients[..n_coeffs - 1], // exclude intercept
+        "intercept": result.intercept,
+        "r_squared": result.r_squared,
+        "mse": result.mse,
+        "n_samples": result.num_samples,
+        "n_features": n_features,
+    });
+    Ok(json.to_string())
+}
+
+impl VArrowScalar for OlsFn {
+    type State = ();
+
+    fn invoke(_state: &Self::State, input: RecordBatch) -> Result<ArrayRef, Box<dyn Error>> {
+        let n = input.num_rows();
+        let mut args: Vec<String> = Vec::with_capacity(input.num_columns());
+        for idx in 0..input.num_columns() {
+            args.push(col_str(&input, idx)?.to_string());
+        }
+        let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        let json = ols_from_json(&arg_refs)?;
+        let out = StringArray::from(vec![Some(json); n]);
+        Ok(Arc::new(out))
+    }
+
+    fn signatures() -> Vec<ArrowFunctionSignature> {
+        vec![ArrowFunctionSignature::variadic(
+            DataType::Utf8,
+            DataType::Utf8,
+        )]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ols_perfect_fit() {
+        // y = 2 + 3x on x = [1,2,3,4]
+        let json = ols_from_json(&["[5.0,8.0,11.0,14.0]", "[1.0,2.0,3.0,4.0]"]).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!((v["coefficients"][0].as_f64().unwrap() - 3.0).abs() < 1e-9);
+        assert!((v["intercept"].as_f64().unwrap() - 2.0).abs() < 1e-9);
+        assert!((v["r_squared"].as_f64().unwrap() - 1.0).abs() < 1e-9);
+        assert_eq!(v["n_features"], 1);
+        assert_eq!(v["n_samples"], 4);
+    }
+
+    #[test]
+    fn test_ols_multivariate() {
+        // y = 1 + 2*x1 + 3*x2 (checked: row1 1+2+3=6, row2 1+4+12=17, row3 1+2+9=12,
+        // row4 1+6+18=25, row5 1+4+24=29)
+        let y = "[6.0, 17.0, 12.0, 25.0, 29.0]";
+        let x1 = "[1.0, 2.0, 1.0, 3.0, 2.0]";
+        let x2 = "[1.0, 4.0, 3.0, 6.0, 8.0]";
+        let json = ols_from_json(&[y, x1, x2]).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let c: Vec<f64> = v["coefficients"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|x| x.as_f64().unwrap())
+            .collect();
+        assert!((c[0] - 2.0).abs() < 1e-6, "b1={}", c[0]);
+        assert!((c[1] - 3.0).abs() < 1e-6, "b2={}", c[1]);
+        assert!((v["intercept"].as_f64().unwrap() - 1.0).abs() < 1e-6);
+        assert!((v["r_squared"].as_f64().unwrap() - 1.0).abs() < 1e-6);
+        assert_eq!(v["n_features"], 2);
+    }
+
+    #[test]
+    fn test_ols_noisy_r2_between_0_and_1() {
+        let y = "[2.0, 3.5, 3.0, 5.0, 4.5]";
+        let x = "[1.0, 2.0, 2.5, 4.0, 3.5]";
+        let json = ols_from_json(&[y, x]).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let r2 = v["r_squared"].as_f64().unwrap();
+        assert!((0.0..=1.0).contains(&r2), "r2={r2}");
+    }
+
+    #[test]
+    fn test_ols_length_mismatch_errors() {
+        let err = ols_from_json(&["[1.0,2.0]", "[1.0,2.0,3.0]"]).unwrap_err();
+        assert!(err.to_string().contains("length mismatch"));
+    }
+
+    #[test]
+    fn test_ols_requires_two_args() {
+        let err = ols_from_json(&["[1.0,2.0]"]).unwrap_err();
+        assert!(err.to_string().contains("at least 2"));
     }
 }
