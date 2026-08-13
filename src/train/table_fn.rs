@@ -228,6 +228,22 @@ pub fn train_and_register(
                 result.mse,
                 lambda,
             )),
+            Algorithm::RobustRegression => {
+                let mut m = LinearModel::new(
+                    result.coefficients,
+                    n_samples,
+                    result.r_squared,
+                    result.mse,
+                    0.0,
+                );
+                m.metadata.algorithm = Algorithm::RobustRegression;
+                m.metadata.hyperparameters_json = serde_json::json!({
+                    "c": params.get("c").copied().unwrap_or(1.345),
+                    "method": "huber-irls"
+                })
+                .to_string();
+                Arc::new(m)
+            }
             Algorithm::LogisticRegression => Arc::new(LogisticModel::new(
                 result.coefficients,
                 n_samples,
@@ -332,6 +348,11 @@ fn register_from_blob(
     let model: Arc<dyn MlModel> = match algorithm {
         Algorithm::LinearRegression | Algorithm::RidgeRegression => {
             Arc::new(LinearModel::deserialize(blob)?)
+        }
+        Algorithm::RobustRegression => {
+            let mut m = LinearModel::deserialize(blob)?;
+            m.metadata.algorithm = Algorithm::RobustRegression;
+            Arc::new(m)
         }
         Algorithm::LogisticRegression => Arc::new(LogisticModel::deserialize(blob)?),
         Algorithm::DecisionTreeRegressor => Arc::new(TreeModel::deserialize(blob)?),

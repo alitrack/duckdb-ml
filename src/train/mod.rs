@@ -9,6 +9,7 @@ pub mod logistic;
 pub mod mlp;
 pub mod multilogistic;
 pub mod ordinal;
+pub mod robust;
 pub mod svm;
 pub mod table_fn;
 pub mod tree;
@@ -201,6 +202,12 @@ pub fn train(
         }
         Algorithm::CoxProportionalHazards => {
             Err("cox requires separate time/event arrays — use ml_cox_train(model, time_json, event_json, features_json, params_json)".into())
+        }
+        Algorithm::RobustRegression => {
+            let c = params.get("c").copied().unwrap_or(1.345);
+            let max_iters = params.get("max_iters").copied().unwrap_or(50.0) as usize;
+            robust::train(x, y, c, max_iters)
+                .map_err(|e| -> Box<dyn Error> { format!("robust: {e}").into() })
         }
         Algorithm::Arima => {
             let p = params.get("p").copied().unwrap_or(1.0) as usize;

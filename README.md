@@ -43,11 +43,11 @@ SELECT ml_assoc_rules(
     0.6);  -- min_confidence (fraction)
 ```
 
-## Algorithms (24)
+## Algorithms (25)
 
 | Category | Algorithms |
 |----------|-----------|
-| **Linear** | `linear_regression`, `ridge_regression`, `lasso_regression` |
+| **Linear** | `linear_regression`, `ridge_regression`, `lasso_regression`, `robust` (Huber IRLS, outlier-resistant) |
 | **Generalized Linear** | `logistic_regression` (binary), `multilogistic` (softmax multi-class), `ordinal` (cumulative-logit ordered multi-class) |
 | **Survival** | `cox` (proportional hazards, via `ml_cox_train` — time/event/features) |
 | **Time Series** | `arima` (ARIMA(p,d,q) forecasting) |
@@ -213,6 +213,26 @@ SELECT ml_predict_batch_value('m', '[[1]]');
 Hyperparameters: `p`/`d`/`q` (AR order / differencing / MA order, defaults
 1/0/0), `lr` (default 0.05, ARMA only), `max_epochs` (default 1000, ARMA
 only). Forecast horizon must be in [1, 100000].
+
+## Robust Regression (robust)
+
+Outlier-resistant linear regression (MADlib `robust` counterpart) via Huber
+loss + iteratively reweighted least squares (IRLS) — starts from OLS, then
+reweights by `w_i = 1` if `|r_i|/(1.4826·MAD) ≤ c` else `c·|r_i|/...`, and
+iterates to convergence. Deterministic; same model format as
+`linear_regression`.
+
+```sql
+SELECT ml_train_model('m', 'robust',
+    '[0,3,6,9,12,15,18,21,24,27,1000,33,36,39,42,45,48,51,54,57]',  -- outlier at 1000
+    '[[0],[1],[2],[3],[4],[5],[6],[7],[8],[9],[10],[11],[12],[13],[14],[15],[16],[17],[18],[19]]',
+    '{"c": 1.345, "max_iters": 50}');
+
+SELECT ml_predict_batch_value('m', '[[20]]');
+-- 60.0 (OLS on the same data gives 116.2 — pulled by the outlier)
+```
+
+Hyperparameters: `c` (Huber cutoff, default 1.345), `max_iters` (default 50).
 
 ## Complete Pipeline Example
 
