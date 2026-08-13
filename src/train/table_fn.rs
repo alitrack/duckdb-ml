@@ -327,7 +327,7 @@ pub fn cox_train_and_register(
 fn register_from_blob(
     algorithm: Algorithm,
     _n_features: usize,
-    _n_samples: usize,
+    n_samples: usize,
     _params: &HashMap<String, f64>,
     blob: &[u8],
 ) -> Result<Arc<dyn crate::model::MlModel>, Box<dyn Error>> {
@@ -382,6 +382,10 @@ fn register_from_blob(
             Arc::new(MultilogisticModel::deserialize(blob)?)
         }
         Algorithm::SVM => Arc::new(SvmModel::deserialize(blob)?),
+        Algorithm::SVR => {
+            let data = crate::train::svr::deserialize(blob)?;
+            Arc::new(crate::model::svr::SvrModel::new(data, n_samples))
+        }
         Algorithm::OrdinalLogisticRegression => Arc::new(OrdinalMlModel::deserialize(blob)?),
         Algorithm::CoxProportionalHazards => Arc::new(CoxMlModel::deserialize(blob)?),
         Algorithm::Arima => Arc::new(ArimaMlModel::deserialize(blob)?),

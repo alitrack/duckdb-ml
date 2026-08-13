@@ -152,6 +152,12 @@ impl VTab for CompareFn {
                                 Algorithm::SVM => SvmModel::deserialize(blob)
                                     .ok()
                                     .map(|m| Arc::new(m) as Arc<dyn MlModel>),
+                                Algorithm::SVR => {
+                                    crate::train::svr::deserialize(blob).ok().map(|data| {
+                                        Arc::new(crate::model::svr::SvrModel::new(data, 0))
+                                            as Arc<dyn MlModel>
+                                    })
+                                }
                                 Algorithm::OrdinalLogisticRegression => {
                                     OrdinalMlModel::deserialize(blob)
                                         .ok()

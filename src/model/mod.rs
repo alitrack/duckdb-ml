@@ -13,6 +13,7 @@ pub mod ordinal;
 pub mod pca;
 pub mod registry;
 pub mod svm;
+pub mod svr;
 pub mod tree;
 pub mod xgboost;
 

@@ -30,6 +30,7 @@ pub enum Algorithm {
     MlpRegressor,
     DBSCAN,
     SVM,
+    SVR,
 }
 
 impl std::fmt::Display for Algorithm {
@@ -60,6 +61,7 @@ impl std::fmt::Display for Algorithm {
             Algorithm::MlpRegressor => write!(f, "mlp_regressor"),
             Algorithm::DBSCAN => write!(f, "dbscan"),
             Algorithm::SVM => write!(f, "svm"),
+            Algorithm::SVR => write!(f, "svr"),
         }
     }
 }
@@ -92,6 +94,7 @@ impl Algorithm {
             "mlp_regressor" => Some(Algorithm::MlpRegressor),
             "dbscan" => Some(Algorithm::DBSCAN),
             "svm" => Some(Algorithm::SVM),
+            "svr" => Some(Algorithm::SVR),
             _ => None,
         }
     }

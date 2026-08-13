@@ -43,11 +43,12 @@ SELECT ml_assoc_rules(
     0.6);  -- min_confidence (fraction)
 ```
 
-## Algorithms (26)
+## Algorithms (27)
 
 | Category | Algorithms |
 |----------|-----------|
 | **Linear** | `linear_regression`, `ridge_regression`, `lasso_regression`, `elastic_net`, `robust` (Huber IRLS, outlier-resistant) |
+| **Kernel** | `svm` (classification), `svr` (ε-SVR regression: linear/rbf/poly/sigmoid kernels, hand-written working-set SMO) |
 | **Generalized Linear** | `logistic_regression` (binary), `multilogistic` (softmax multi-class), `ordinal` (cumulative-logit ordered multi-class) |
 | **Survival** | `cox` (proportional hazards, via `ml_cox_train` — time/event/features) |
 | **Time Series** | `arima` (ARIMA(p,d,q) forecasting) |
@@ -257,6 +258,26 @@ SELECT ml_predict_batch_value('m', '[[10]]');  -- ~32
 
 Hyperparameters: `alpha` (overall strength, default 1.0), `l1_ratio`
 (L1 mixing, default 0.5), `max_iter` (default 1000).
+
+## Support Vector Regression (svr)
+
+ε-SVR with four kernels (linear/rbf/poly/sigmoid), solved by a
+hand-written working-set SMO (libsvm-style pair selection with KKT
+checking). Predictions are `Σ βᵢ·K(xᵢ, x) + b` over support vectors.
+
+```sql
+SELECT ml_train_model('m', 'svr',
+    '[1,4,9,16,25,36,49,64,81,100]',
+    '[[1],[2],[3],[4],[5],[6],[7],[8],[9],[10]]',
+    '{"kernel": 1, "c": 100, "epsilon": 0.001, "gamma": 0.5}');
+SELECT ml_predict_batch_value('m', '[[5.5]]');  -- ~30.25
+```
+
+Hyperparameters: `kernel` (0=linear, 1=rbf, 2=poly, 3=sigmoid; default
+1), `c` (default 1.0), `epsilon` (tube width, default 0.1), `gamma`
+(rbf/poly/sigmoid, default 1/n_features), `degree` (poly, default 3),
+`coef0` (poly/sigmoid, default 0), `tol` (SMO tolerance, default 1e-3),
+`max_iter` (default 2000). Dataset limit: ≤ 1000 rows (kernel matrix).
 
 ## Complete Pipeline Example
 

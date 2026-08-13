@@ -12,6 +12,7 @@ pub mod multilogistic;
 pub mod ordinal;
 pub mod robust;
 pub mod svm;
+pub mod svr;
 pub mod table_fn;
 pub mod tree;
 
@@ -234,6 +235,24 @@ pub fn train(
                 num_samples: y.len(),
                 model_blob: Some(blob),
             })
+        }
+        Algorithm::SVR => {
+            let kernel = match params.get("kernel").copied().unwrap_or(1.0) as u8 {
+                0 => svr::Kernel::Linear,
+                1 => svr::Kernel::Rbf,
+                2 => svr::Kernel::Polynomial,
+                3 => svr::Kernel::Sigmoid,
+                _ => return Err("svr: unknown kernel code (0=linear|1=rbf|2=poly|3=sigmoid)".into()),
+            };
+            let c = params.get("c").copied().unwrap_or(1.0);
+            let epsilon = params.get("epsilon").copied().unwrap_or(0.1);
+            let gamma = params.get("gamma").copied().unwrap_or(0.0);
+            let degree = params.get("degree").copied().unwrap_or(3.0) as usize;
+            let coef0 = params.get("coef0").copied().unwrap_or(0.0);
+            let tol = params.get("tol").copied().unwrap_or(1e-3);
+            let max_iter = params.get("max_iter").copied().unwrap_or(2000.0) as usize;
+            svr::train(x, y, kernel, c, epsilon, gamma, degree, coef0, tol, max_iter)
+                .map_err(|e| -> Box<dyn Error> { format!("svr: {e}").into() })
         }
         Algorithm::SVM => {
             let c = params.get("c").copied().unwrap_or(1.0);
