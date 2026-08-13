@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 /// 0 = linear, 1 = Gaussian/RBF (default).
 pub const KERNEL_LINEAR: u8 = 0;
 pub const KERNEL_GAUSSIAN: u8 = 1;
+pub const KERNEL_POLYNOMIAL: u8 = 2;
 
 /// Self-describing blob: feature count + kernel ride along with the SVM so
 /// deserialization needs no external context.
@@ -39,12 +40,15 @@ pub struct SvmTrained {
 }
 
 /// Train a binary SVM. `y` must contain only 0.0 / 1.0 labels.
+#[allow(clippy::too_many_arguments)]
 pub fn train(
     x: &[Vec<f64>],
     y: &[f64],
     c: f64,
     kernel: u8,
     gamma: f64,
+    degree: f64,
+    coef0: f64,
 ) -> Result<SvmTrained, String> {
     if x.is_empty() || x.len() != y.len() {
         return Err("empty or mismatched data".into());
@@ -56,11 +60,16 @@ pub fn train(
     if c <= 0.0 {
         return Err("c must be > 0".into());
     }
-    if gamma <= 0.0 {
+    if kernel == KERNEL_GAUSSIAN && gamma <= 0.0 {
         return Err("gamma must be > 0".into());
     }
-    if kernel != KERNEL_LINEAR && kernel != KERNEL_GAUSSIAN {
-        return Err(format!("unknown kernel {kernel} (0=linear, 1=gaussian)"));
+    if kernel == KERNEL_POLYNOMIAL && degree < 1.0 {
+        return Err("degree must be >= 1".into());
+    }
+    if kernel != KERNEL_LINEAR && kernel != KERNEL_GAUSSIAN && kernel != KERNEL_POLYNOMIAL {
+        return Err(format!(
+            "unknown kernel {kernel} (0=linear, 1=gaussian, 2=poly)"
+        ));
     }
 
     let flat: Vec<f64> = x.iter().flatten().copied().collect();
@@ -86,6 +95,7 @@ pub fn train(
         let p = Svm::<f64, bool>::params().pos_neg_weights(c, c);
         match kernel {
             KERNEL_LINEAR => p.linear_kernel(),
+            KERNEL_POLYNOMIAL => p.polynomial_kernel(coef0, degree),
             _ => p.gaussian_kernel(gamma),
         }
     }
@@ -131,6 +141,7 @@ pub fn predict_one(svm: &Svm<f64, bool>, features: &[f64]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::MlModel;
 
     // Two linearly separable blobs: x < 0 → class 0, x > 0 → class 1.
     fn separable_data() -> (Vec<Vec<f64>>, Vec<f64>) {
@@ -151,7 +162,7 @@ mod tests {
     #[test]
     fn linear_separable() {
         let (x, y) = separable_data();
-        let t = train(&x, &y, 1.0, KERNEL_LINEAR, 1.0).unwrap();
+        let t = train(&x, &y, 1.0, KERNEL_LINEAR, 1.0, 3.0, 0.0).unwrap();
         let blob = deserialize(&t.blob).unwrap();
         assert!(t.n_support > 0);
         assert_eq!(blob.n_features, 2);
@@ -177,7 +188,7 @@ mod tests {
             x.push(vec![2.0 * a.cos(), 2.0 * a.sin()]);
             y.push(0.0);
         }
-        let t = train(&x, &y, 1.0, KERNEL_GAUSSIAN, 0.5).unwrap();
+        let t = train(&x, &y, 1.0, KERNEL_GAUSSIAN, 0.5, 3.0, 0.0).unwrap();
         let blob = deserialize(&t.blob).unwrap();
         assert!(predict_one(&blob.svm, &[0.0, 0.0]) > 0.5);
         assert!(predict_one(&blob.svm, &[1.5, 0.0]) < 0.5);
@@ -185,19 +196,44 @@ mod tests {
 
     #[test]
     fn validation_errors() {
-        assert!(train(&[], &[], 1.0, KERNEL_LINEAR, 1.0).is_err());
-        assert!(train(&[vec![1.0]], &[0.0, 1.0], 1.0, KERNEL_LINEAR, 1.0).is_err());
-        assert!(train(&[vec![1.0]], &[0.5], 1.0, KERNEL_LINEAR, 1.0).is_err());
-        assert!(train(&[vec![1.0]], &[0.0], -1.0, KERNEL_LINEAR, 1.0).is_err());
-        assert!(train(&[vec![1.0]], &[0.0], 1.0, 7, 1.0).is_err());
+        assert!(train(&[], &[], 1.0, KERNEL_LINEAR, 1.0, 3.0, 0.0).is_err());
+        assert!(train(&[vec![1.0]], &[0.0, 1.0], 1.0, KERNEL_LINEAR, 1.0, 3.0, 0.0).is_err());
+        assert!(train(&[vec![1.0]], &[0.5], 1.0, KERNEL_LINEAR, 1.0, 3.0, 0.0).is_err());
+        assert!(train(&[vec![1.0]], &[0.0], -1.0, KERNEL_LINEAR, 1.0, 3.0, 0.0).is_err());
+        assert!(train(&[vec![1.0]], &[0.0], 1.0, 7, 1.0, 3.0, 0.0).is_err());
         assert!(deserialize(&[0u8, 1, 2]).is_err());
     }
 
     #[test]
     fn blob_roundtrip_stable() {
         let (x, y) = separable_data();
-        let t1 = train(&x, &y, 1.0, KERNEL_LINEAR, 1.0).unwrap();
-        let t2 = train(&x, &y, 1.0, KERNEL_LINEAR, 1.0).unwrap();
+        let t1 = train(&x, &y, 1.0, KERNEL_LINEAR, 1.0, 3.0, 0.0).unwrap();
+        let t2 = train(&x, &y, 1.0, KERNEL_LINEAR, 1.0, 3.0, 0.0).unwrap();
         assert_eq!(t1.blob, t2.blob); // deterministic training
+    }
+
+    #[test]
+    fn polynomial_kernel_separates_ball() {
+        // 1-D ball: label=1 inside |x|<1, 0 outside — not linearly
+        // separable, but a degree-2 polynomial kernel (x·y+1)² handles it
+        let x: Vec<Vec<f64>> = (0..16).map(|i| vec![-1.5 + i as f64 * 0.2]).collect();
+        let y: Vec<f64> = x.iter().map(|s| (s[0].abs() < 1.0) as u8 as f64).collect();
+        let t = train(&x, &y, 10.0, KERNEL_POLYNOMIAL, 1.0, 2.0, 1.0).unwrap();
+        let model = crate::model::svm::SvmModel::deserialize(&t.blob).unwrap();
+        assert_eq!(model.predict(&[0.5]).unwrap(), 1.0, "inside ball -> 1");
+        assert_eq!(model.predict(&[1.4]).unwrap(), 0.0, "outside ball -> 0");
+        assert_eq!(
+            model.predict(&[-1.3]).unwrap(),
+            0.0,
+            "outside ball (neg) -> 0"
+        );
+    }
+
+    #[test]
+    fn polynomial_kernel_rejects_bad_degree() {
+        let (x, y) = separable_data();
+        // degree 0 is not a valid polynomial kernel exponent
+        let t = train(&x, &y, 1.0, KERNEL_POLYNOMIAL, 1.0, 0.0, 1.0);
+        assert!(t.is_err(), "degree must be >= 1");
     }
 }

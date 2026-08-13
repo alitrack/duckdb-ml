@@ -258,7 +258,9 @@ pub fn train(
             let c = params.get("c").copied().unwrap_or(1.0);
             let kernel = params.get("kernel").copied().unwrap_or(1.0) as u8;
             let gamma = params.get("gamma").copied().unwrap_or(1.0);
-            let t = svm::train(x, y, c, kernel, gamma)
+            let degree = params.get("degree").copied().unwrap_or(3.0);
+            let coef0 = params.get("coef0").copied().unwrap_or(0.0);
+            let t = svm::train(x, y, c, kernel, gamma, degree, coef0)
                 .map_err(|e| -> Box<dyn Error> { format!("svm: {e}").into() })?;
             Ok(TrainingResult {
                 coefficients: vec![],

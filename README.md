@@ -120,7 +120,9 @@ returns the nearest-cluster label (0..k-1).
 
 Binary Support Vector Classifier powered by
 [linfa-svm](https://crates.io/crates/linfa-svm) (MIT, libsvm SMO solver).
-Labels must be 0/1; choose the kernel with `kernel` (0 = linear, 1 = Gaussian/RBF).
+Labels must be 0/1; choose the kernel with `kernel` (0 = linear, 1 = Gaussian/RBF,
+2 = polynomial). Polynomial kernel takes `degree` (default 3) and `coef0`
+(default 0).
 
 ```sql
 -- Linear kernel

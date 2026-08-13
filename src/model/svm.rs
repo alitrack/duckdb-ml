@@ -70,7 +70,7 @@ mod tests {
     fn roundtrip_and_predict() {
         let x = vec![vec![-1.0], vec![-0.5], vec![1.0], vec![1.5]];
         let y = vec![0.0, 0.0, 1.0, 1.0];
-        let t = svm::train(&x, &y, 1.0, KERNEL_LINEAR, 1.0).unwrap();
+        let t = svm::train(&x, &y, 1.0, KERNEL_LINEAR, 1.0, 3.0, 0.0).unwrap();
         let m = SvmModel::deserialize(&t.blob).unwrap();
         assert_eq!(m.predict(&[-0.9]).unwrap(), 0.0);
         assert_eq!(m.predict(&[1.2]).unwrap(), 1.0);
