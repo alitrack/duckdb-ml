@@ -33,6 +33,14 @@ SELECT ml_similarity_value(
     '[0.1, 0.2, ...]',
     (SELECT to_json(list({'row_id': id, 'embeds': embeds})) FROM media),
     10, 0.3);
+
+-- Association rules (market basket, Apriori)
+SELECT ml_assoc_rules(
+    (SELECT to_json(list({'tid': txn_id, 'items': items}))
+     FROM (SELECT txn_id, list(item_id ORDER BY item_id) AS items
+           FROM orders GROUP BY txn_id) t),
+    0.05,  -- min_support (fraction)
+    0.6);  -- min_confidence (fraction)
 ```
 
 ## Algorithms (18)
@@ -88,6 +96,48 @@ SELECT * FROM ml_list_models;
 - **Data Lineage** — `ml_snapshot` records feature columns, sample counts, data hashes
 - **Experiment Tracking** — DuckDB-native tables (`duckdb_ml.experiments`, `runs`, `metrics`, `params`)
 - **Embeddings** — `ml_embed` (ONNX encoder → f32 LE BLOB, per-row, UPDATE-friendly) + `ml_similarity_value` (full-scan cosine Top-K with threshold, k cap 10000, skip/warning stats, cancellation flag)
+- **Association Rules** — `ml_assoc_rules` (Apriori, market basket): support/confidence/lift, min_support + min_confidence filters, itemset-size cap, candidate/rule blowup guards, cancellation flag
+
+## Association Rules (Apriori)
+
+Market basket analysis over transaction data, matching MADlib's `assoc_rules`
+semantics (support = itemset transactions / total, confidence = supp(A∪B)/supp(A),
+lift = confidence / supp(B)).
+
+```sql
+SELECT ml_assoc_rules(
+    (SELECT to_json(list({'tid': txn_id, 'items': items}))
+     FROM (SELECT txn_id, list(item_id ORDER BY item_id) AS items
+           FROM orders GROUP BY txn_id) t),
+    0.05,   -- min_support (0, 1]
+    0.6,    -- min_confidence (0, 1]
+    4);     -- optional max_itemset_size (0 = unlimited)
+```
+
+Returns JSON: `{"rules":[{antecedent,consequent,support,confidence,lift}],
+"frequent_itemsets":[{items,support}], "stats":{transactions,candidates,
+rules,cancelled,truncated}}`. Unnest into a relation with `from_json`:
+
+```sql
+WITH r AS (
+    SELECT from_json(ml_assoc_rules(
+        (SELECT to_json(list({'tid': txn_id, 'items': items}))
+         FROM (SELECT txn_id, list(item_id ORDER BY item_id) AS items
+               FROM orders GROUP BY txn_id) t),
+        0.05, 0.6),
+        '{"rules": [{"antecedent": ["VARCHAR"], "consequent": ["VARCHAR"],
+                     "support": "DOUBLE", "confidence": "DOUBLE",
+                     "lift": "DOUBLE"}]}') AS parsed
+)
+SELECT unnest(parsed.rules) AS rule FROM r;
+```
+
+- Items accept string/number/bool scalars, deduplicated per transaction;
+  `tid` is optional. NULL items skipped; object/array items error.
+- Deterministic ordering: confidence desc → support desc → antecedent length asc.
+- Defensive caps: 2M candidates / 1M rules per run (truncated flag, no OOM);
+  global cancel flag for embedded callers (`set_assoc_cancel(true)`), checks
+  every 4096 work units so small scans are never interrupted.
 
 ## Embedding & Similarity (AD-001)
 
@@ -142,6 +192,7 @@ flowchart TD
     G[ml_load_xgboost / ml_load_onnx] --> B
     B --> H[ml_embed → BLOB column]
     H --> I[ml_similarity_value: full-scan cosine Top-K]
+    J[orders table] --> K[ml_assoc_rules: Apriori support/confidence/lift]
 ```
 
 All models live in a thread-safe global registry (LRU cache, 100 model limit).

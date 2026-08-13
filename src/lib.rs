@@ -1,3 +1,4 @@
+pub mod assoc_rules;
 pub mod automl;
 pub mod deploy;
 pub mod embed;
@@ -48,6 +49,7 @@ pub unsafe fn ml_init(con: Connection) -> Result<(), Box<dyn Error>> {
     #[cfg(feature = "onnx")]
     con.register_scalar_function::<embed::EmbedFn>("ml_embed")?;
     con.register_scalar_function::<embed::SimilarityFn>("ml_similarity_value")?;
+    con.register_scalar_function::<assoc_rules::AssocRulesFn>("ml_assoc_rules")?;
 
     log::info!("duckdb_ml initialized successfully");
     Ok(())
