@@ -862,6 +862,7 @@ dependencies = [
  "env_logger",
  "linfa",
  "linfa-clustering",
+ "linfa-svm",
  "log",
  "ndarray 0.16.1",
  "ort",
@@ -1603,6 +1604,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "linfa-kernel"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3531f4d2c1636a1aad360ad5b8ca6196523b742c981d9b917fcbd2274393987"
+dependencies = [
+ "linfa",
+ "linfa-nn",
+ "ndarray 0.16.1",
+ "num-traits",
+ "serde",
+ "sprs",
+]
+
+[[package]]
 name = "linfa-linalg"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1626,6 +1641,21 @@ dependencies = [
  "noisy_float",
  "num-traits",
  "order-stat",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "linfa-svm"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bd4acc489c5667fc7ed9796e9a0aa2e1138966c2b34d61422d5433e40ca6337"
+dependencies = [
+ "linfa",
+ "linfa-kernel",
+ "ndarray 0.16.1",
+ "ndarray-rand",
+ "num-traits",
+ "serde",
  "thiserror 2.0.18",
 ]
 
@@ -1743,6 +1773,7 @@ dependencies = [
  "portable-atomic-util",
  "rawpointer",
  "rayon",
+ "serde",
 ]
 
 [[package]]
@@ -2700,6 +2731,7 @@ dependencies = [
  "ndarray 0.16.1",
  "num-complex",
  "num-traits",
+ "serde",
  "smallvec",
 ]
 

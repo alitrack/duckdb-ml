@@ -5,6 +5,7 @@ pub mod lasso;
 pub mod linear;
 pub mod logistic;
 pub mod mlp;
+pub mod svm;
 pub mod table_fn;
 pub mod tree;
 
@@ -149,6 +150,21 @@ pub fn train(
                 mse: Some(noise_ratio),
                 num_samples: x.len(),
                 model_blob: Some(blob),
+            })
+        }
+        Algorithm::SVM => {
+            let c = params.get("c").copied().unwrap_or(1.0);
+            let kernel = params.get("kernel").copied().unwrap_or(1.0) as u8;
+            let gamma = params.get("gamma").copied().unwrap_or(1.0);
+            let t = svm::train(x, y, c, kernel, gamma)
+                .map_err(|e| -> Box<dyn Error> { format!("svm: {e}").into() })?;
+            Ok(TrainingResult {
+                coefficients: vec![],
+                intercept: t.rho,
+                r_squared: None,
+                mse: Some(t.n_support as f64),
+                num_samples: x.len(),
+                model_blob: Some(t.blob),
             })
         }
         Algorithm::KMeans => {

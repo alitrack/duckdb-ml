@@ -43,7 +43,7 @@ SELECT ml_assoc_rules(
     0.6);  -- min_confidence (fraction)
 ```
 
-## Algorithms (19)
+## Algorithms (20)
 
 | Category | Algorithms |
 |----------|-----------|
@@ -53,6 +53,7 @@ SELECT ml_assoc_rules(
 | **Neural** | `mlp_regressor` (1-layer, ReLU, SGD+momentum) |
 | **Distance** | `knn_regressor`, `knn_classifier` |
 | **Bayesian** | `naive_bayes` |
+| **Kernel** | `svm` (binary SVC, linear/Gaussian kernel, libsvm SMO core) |
 | **Clustering** | `kmeans`, `dbscan` (density-based, noise detection, linfa-clustering) |
 | **Dim Reduction** | `pca` |
 | **External** | `xgboost_regressor`, `xgboost_classifier` (load via `ml_load_xgboost`), `onnx` (load via `ml_load_onnx`) |
@@ -103,6 +104,32 @@ SELECT ml_predict_batch_value('m', '[[0.05,0.05],[5.0,5.1]]');
 
 The trained model stores per-cluster means + counts; `ml_predict_batch_value`
 returns the nearest-cluster label (0..k-1).
+
+## SVM Classification
+
+Binary Support Vector Classifier powered by
+[linfa-svm](https://crates.io/crates/linfa-svm) (MIT, libsvm SMO solver).
+Labels must be 0/1; choose the kernel with `kernel` (0 = linear, 1 = Gaussian/RBF).
+
+```sql
+-- Linear kernel
+SELECT ml_train_model('m', 'svm', '[0,0,1,1]',
+    '[[-1.0,-1.0],[-0.9,-0.8],[1.0,1.0],[1.1,1.2]]',
+    '{"kernel": 0, "c": 1.0}');
+
+-- Gaussian/RBF kernel (nonlinear boundaries)
+SELECT ml_train_model('m', 'svm', '[1,1,0,0]',
+    '[[0.2,0.1],[0.1,0.2],[2.0,0.0],[0.0,2.0]]',
+    '{"kernel": 1, "gamma": 1.0}');
+
+SELECT ml_predict_batch_value('m', '[[-0.5,-0.5],[0.8,0.9]]');
+```
+
+Hyperparameters: `c` (misclassification penalty, default 1.0),
+`gamma` (Gaussian kernel radius, default 1.0), `kernel` (0/1, default RBF).
+The trained model embeds support vectors + dual coefficients via bincode
+(serde); prediction reuses linfa's own decision path. Model blob includes the
+feature count, so `ml_predict_batch_value` validates dimensions.
 
 ## Complete Pipeline Example
 

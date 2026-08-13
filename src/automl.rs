@@ -119,6 +119,7 @@ impl VTab for CompareFn {
                         logistic::LogisticModel,
                         naive_bayes::NbMlModel,
                         pca::PcaMlModel,
+                        svm::SvmModel,
                         tree::{ForestModel, TreeModel},
                         MlModel,
                     };
@@ -137,6 +138,9 @@ impl VTab for CompareFn {
                                     .ok()
                                     .map(|m| Arc::new(m) as Arc<dyn MlModel>),
                                 Algorithm::DBSCAN => DbscanModel::deserialize(blob)
+                                    .ok()
+                                    .map(|m| Arc::new(m) as Arc<dyn MlModel>),
+                                Algorithm::SVM => SvmModel::deserialize(blob)
                                     .ok()
                                     .map(|m| Arc::new(m) as Arc<dyn MlModel>),
                                 Algorithm::KNNRegressor | Algorithm::KNNClassifier => {

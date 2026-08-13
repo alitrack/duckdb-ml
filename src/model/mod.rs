@@ -8,6 +8,7 @@ pub mod mlp;
 pub mod naive_bayes;
 pub mod pca;
 pub mod registry;
+pub mod svm;
 pub mod tree;
 pub mod xgboost;
 

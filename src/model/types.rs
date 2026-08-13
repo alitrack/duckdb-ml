@@ -23,6 +23,7 @@ pub enum Algorithm {
     LassoRegression,
     MlpRegressor,
     DBSCAN,
+    SVM,
 }
 
 impl std::fmt::Display for Algorithm {
@@ -46,6 +47,7 @@ impl std::fmt::Display for Algorithm {
             Algorithm::LassoRegression => write!(f, "lasso_regression"),
             Algorithm::MlpRegressor => write!(f, "mlp_regressor"),
             Algorithm::DBSCAN => write!(f, "dbscan"),
+            Algorithm::SVM => write!(f, "svm"),
         }
     }
 }
@@ -71,6 +73,7 @@ impl Algorithm {
             "lasso_regression" => Some(Algorithm::LassoRegression),
             "mlp_regressor" => Some(Algorithm::MlpRegressor),
             "dbscan" => Some(Algorithm::DBSCAN),
+            "svm" => Some(Algorithm::SVM),
             _ => None,
         }
     }
