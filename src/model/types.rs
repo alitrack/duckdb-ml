@@ -94,6 +94,17 @@ pub trait MlModel: Send + Sync {
     fn deserialize(blob: &[u8]) -> Result<Self, ModelError>
     where
         Self: Sized;
+
+    /// Embedding inference (AD-001/AD-002): returns the full f32 vector.
+    ///
+    /// Only encoder-type models (ONNX) implement this; the default errors so
+    /// `ml_embed` over a regression model fails with a descriptive message.
+    fn embed(&self, _features: &[f64]) -> Result<Vec<f32>, ModelError> {
+        Err(ModelError::Training(format!(
+            "model type {} does not support embedding (ONNX encoder required)",
+            self.algorithm()
+        )))
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

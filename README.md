@@ -24,6 +24,15 @@ SELECT * FROM ml_deploy('my_model', 'rollback');
 -- Data version tracking
 SELECT * FROM ml_snapshot('my_model', 'train_data', 4, 250, 'target', '["x1","x2"]', 'abc123');
 SELECT * FROM ml_list_snapshots('my_model');
+
+-- Embedding (ONNX encoder, AD-001): f32 LE blob per row
+UPDATE media SET embeds = ml_embed('clip', features_json);
+
+-- Similarity: full-scan cosine Top-K over an embedding column
+SELECT ml_similarity_value(
+    '[0.1, 0.2, ...]',
+    (SELECT to_json(list({'row_id': id, 'embeds': embeds})) FROM media),
+    10, 0.3);
 ```
 
 ## Algorithms (18)
@@ -78,6 +87,44 @@ SELECT * FROM ml_list_models;
 - **Batch Prediction** — JSON 2D arrays or `@model_name` cached data references
 - **Data Lineage** — `ml_snapshot` records feature columns, sample counts, data hashes
 - **Experiment Tracking** — DuckDB-native tables (`duckdb_ml.experiments`, `runs`, `metrics`, `params`)
+- **Embeddings** — `ml_embed` (ONNX encoder → f32 LE BLOB, per-row, UPDATE-friendly) + `ml_similarity_value` (full-scan cosine Top-K with threshold, k cap 10000, skip/warning stats, cancellation flag)
+
+## Embedding & Similarity (AD-001)
+
+Storage follows the Lap pattern: embeddings live in a plain `BLOB` column
+(f32 little-endian packed, `4 × dim` bytes), no separate vector database.
+Similarity retrieval is an explicit full-scan task — zero external components.
+
+```sql
+-- 1. Load an ONNX encoder model (CLIP, MiniLM, ...)
+SELECT * FROM ml_load_onnx('clip', '/models/clip_text.onnx', 77);
+
+-- 2. Embed a column into a BLOB column (per-row, works in UPDATE)
+CREATE TABLE media_embeds AS
+SELECT id, ml_embed('clip', token_ids) AS embeds FROM media;
+
+-- 3. Similarity scan: query vector (JSON or hex) + candidates from a subquery
+SELECT ml_similarity_value(
+    '[0.1, 0.2, ...]',                       -- query embedding
+    (SELECT to_json(list({'row_id': id, 'embeds': embeds})) FROM media_embeds),
+    10,                                      -- k (default 10, cap 10000)
+    0.3);                                    -- threshold (default 0.0)
+```
+
+Result JSON: `{"results":[{"row_id":1,"score":0.99},...],"scanned":N,
+"skipped_null":a,"skipped_bad_len":b,"skipped_dim":c,"cancelled":false}`.
+
+- Candidates accept struct form (`{"row_id":N,"embeds":...}`) or pair form
+  (`[N, ...]`); embedding payloads accept DuckDB JSON binary strings
+  (`to_json(blob)` output, e.g. `"\x00\x00\x80?"`), hex strings, or JSON vectors.
+- Score = cosine similarity of L2-normalized vectors, clamped to [-1, 1].
+- Rows with blob length % 4 != 0 are skipped and counted; dimension mismatches
+  score 0.0 and are counted; NULL embeddings skipped. Empty table → empty result.
+- Cancellation: embedded (rlib) callers can `set_similarity_cancel(true)` to
+  abort a scan (returns partial top-k with `"cancelled": true`); at the SQL
+  layer DuckDB's query interrupt terminates the statement.
+- HNSW acceleration (hnsw_rs 0.3.4, MIT/Apache-2.0, pure Rust — evaluated
+  2026-08) is deferred until a >500k-row benchmark shows full-scan is too slow.
 - **Pure Rust XGBoost** — train GBDT ensembles, serialize to XGBoost-compatible JSON
 - **External Models** — load ONNX and pre-trained XGBoost JSON files
 - **18 algorithms** — linear, trees, boosting, neural, distance, bayesian, clustering, dim reduction
@@ -93,11 +140,15 @@ flowchart TD
     B --> E[ml_deploy / rollback]
     A --> F[ml_snapshot / ml_list_snapshots]
     G[ml_load_xgboost / ml_load_onnx] --> B
+    B --> H[ml_embed → BLOB column]
+    H --> I[ml_similarity_value: full-scan cosine Top-K]
 ```
 
 All models live in a thread-safe global registry (LRU cache, 100 model limit).
 Deployment state, snapshot metadata, and cached datasets are all in-memory
 (DuckDB loadable extension constraint: no Connection in table functions).
+Embeddings live in user tables (BLOB columns); similarity scans decode and
+score in a streaming cursor with a cancellation flag.
 
 ## Build & Install
 

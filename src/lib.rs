@@ -1,5 +1,6 @@
 pub mod automl;
 pub mod deploy;
+pub mod embed;
 pub mod load;
 pub mod model;
 pub mod predict;
@@ -42,6 +43,11 @@ pub unsafe fn ml_init(con: Connection) -> Result<(), Box<dyn Error>> {
     con.register_scalar_function::<scalar::TrainModelFn>("ml_train_model")?;
     con.register_scalar_function::<scalar::PredictBatchValueFn>("ml_predict_batch_value")?;
     con.register_scalar_function::<scalar::OlsFn>("ml_ols")?;
+
+    // v0.14: embedding capability (AD-001)
+    #[cfg(feature = "onnx")]
+    con.register_scalar_function::<embed::EmbedFn>("ml_embed")?;
+    con.register_scalar_function::<embed::SimilarityFn>("ml_similarity_value")?;
 
     log::info!("duckdb_ml initialized successfully");
     Ok(())

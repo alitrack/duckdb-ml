@@ -176,6 +176,10 @@ impl MlModel for OnnxModel {
         Algorithm::Onnx
     }
 
+    fn embed(&self, features: &[f64]) -> Result<Vec<f32>, ModelError> {
+        OnnxModel::embed(self, features)
+    }
+
     fn metadata(&self) -> &ModelMetadata {
         &self.metadata
     }
