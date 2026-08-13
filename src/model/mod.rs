@@ -1,3 +1,5 @@
+pub mod arima;
+pub mod cox;
 pub mod dbscan;
 pub mod kmeans;
 pub mod knn;
@@ -7,6 +9,7 @@ pub mod logistic;
 pub mod mlp;
 pub mod multilogistic;
 pub mod naive_bayes;
+pub mod ordinal;
 pub mod pca;
 pub mod registry;
 pub mod svm;

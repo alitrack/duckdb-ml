@@ -1,3 +1,5 @@
+pub mod arima;
+pub mod cox;
 pub mod dbscan;
 pub mod gbdt;
 pub mod kmeans;
@@ -6,6 +8,7 @@ pub mod linear;
 pub mod logistic;
 pub mod mlp;
 pub mod multilogistic;
+pub mod ordinal;
 pub mod svm;
 pub mod table_fn;
 pub mod tree;
@@ -172,6 +175,48 @@ pub fn train(
                 r_squared: Some(correct as f64 / x.len() as f64),
                 mse: None,
                 num_samples: x.len(),
+                model_blob: Some(blob),
+            })
+        }
+        Algorithm::OrdinalLogisticRegression => {
+            let lr = params.get("lr").copied().unwrap_or(0.1);
+            let max_epochs = params.get("max_epochs").copied().unwrap_or(800.0) as usize;
+            let m = ordinal::train(x, y, lr, max_epochs)
+                .map_err(|e| -> Box<dyn Error> { format!("ordinal: {e}").into() })?;
+            let blob = ordinal::serialize(&m);
+            let mut correct = 0;
+            for i in 0..x.len() {
+                if ordinal::predict_one(&m, &x[i]) == y[i] {
+                    correct += 1;
+                }
+            }
+            Ok(TrainingResult {
+                coefficients: vec![],
+                intercept: 0.0,
+                r_squared: Some(correct as f64 / x.len() as f64),
+                mse: None,
+                num_samples: x.len(),
+                model_blob: Some(blob),
+            })
+        }
+        Algorithm::CoxProportionalHazards => {
+            Err("cox requires separate time/event arrays — use ml_cox_train(model, time_json, event_json, features_json, params_json)".into())
+        }
+        Algorithm::Arima => {
+            let p = params.get("p").copied().unwrap_or(1.0) as usize;
+            let d = params.get("d").copied().unwrap_or(1.0) as usize;
+            let q = params.get("q").copied().unwrap_or(0.0) as usize;
+            let lr = params.get("lr").copied().unwrap_or(0.05);
+            let max_epochs = params.get("max_epochs").copied().unwrap_or(1000.0) as usize;
+            let m = arima::train(y, p, d, q, lr, max_epochs)
+                .map_err(|e| -> Box<dyn Error> { format!("arima: {e}").into() })?;
+            let blob = arima::serialize(&m);
+            Ok(TrainingResult {
+                coefficients: vec![],
+                intercept: m.intercept,
+                r_squared: None,
+                mse: None,
+                num_samples: y.len(),
                 model_blob: Some(blob),
             })
         }

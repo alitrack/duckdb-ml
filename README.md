@@ -43,12 +43,14 @@ SELECT ml_assoc_rules(
     0.6);  -- min_confidence (fraction)
 ```
 
-## Algorithms (21)
+## Algorithms (24)
 
 | Category | Algorithms |
 |----------|-----------|
 | **Linear** | `linear_regression`, `ridge_regression`, `lasso_regression` |
-| **Generalized Linear** | `logistic_regression` (binary), `multilogistic` (softmax multi-class, any numeric labels) |
+| **Generalized Linear** | `logistic_regression` (binary), `multilogistic` (softmax multi-class), `ordinal` (cumulative-logit ordered multi-class) |
+| **Survival** | `cox` (proportional hazards, via `ml_cox_train` — time/event/features) |
+| **Time Series** | `arima` (ARIMA(p,d,q) forecasting) |
 | **Tree** | `decision_tree`, `random_forest` |
 | **Gradient Boosting** | `xgboost_regression`, `xgboost_binary` (pure-Rust GBDT) |
 | **Neural** | `mlp_regressor` (1-layer, ReLU, SGD+momentum) |
@@ -150,6 +152,67 @@ SELECT ml_predict_batch_value('m', '[[-4.0],[4.0],[0.2]]');
 
 Hyperparameters: `lr` (learning rate, default 0.1), `max_epochs` (default 500,
 early-stops on loss plateau). Training is deterministic (zero-init weights).
+
+## Ordinal Logistic Regression (ordinal)
+
+Cumulative-logit (proportional odds) ordinal classifier (MADlib `ordinal`
+counterpart), hand-rolled full-batch gradient descent over the exact NLL —
+no new deps. Thresholds are chained (θ_j = θ_1 + Σ e^{δ}) so ordering is
+guaranteed monotone. Labels can be any distinct numbers; `predict` returns
+the original label values.
+
+```sql
+SELECT ml_train_model('m', 'ordinal', '[0,0,0,1,1,1,2,2,2]',
+    '[[-4.0],[-3.0],[-2.0],[0.0],[1.0],[2.0],[4.0],[5.0],[6.0]]',
+    '{"lr": 0.1, "max_epochs": 800}');
+
+SELECT ml_predict_batch_value('m', '[[-3.0],[1.0],[5.0]]');
+-- [0.0, 1.0, 2.0]
+```
+
+Hyperparameters: `lr` (default 0.1), `max_epochs` (default 800).
+
+## Cox Proportional Hazards (cox)
+
+Survival regression (MADlib `cox_prop_hazards` counterpart), hand-rolled
+partial likelihood with Breslow tie handling — no new deps. Training needs
+three arrays (time, event, features), so it has its own entry point:
+
+```sql
+SELECT ml_cox_train('m', '[1.2,0.8,2.1,0.5,1.8]',  -- survival times
+    '[1,1,0,1,1]',                                 -- event flags (0=censored)
+    '[[1.0],[2.0],[0.5],[3.0],[1.5]]',
+    '{"lr": 0.05, "max_epochs": 2000}');
+
+SELECT ml_predict_batch_value('m', '[[1.0],[2.0],[0.5]]');
+-- relative risks exp(w·x): [9.35, 87.44, 3.06]
+```
+
+Predictions are hazard ratios exp(w·x) relative to the baseline (x = 0).
+Hyperparameters: `lr` (default 0.05), `max_epochs` (default 2000).
+Coefficients can be inspected via `ml_get_model_metadata('m')`.
+
+## ARIMA Time Series (arima)
+
+ARIMA(p,d,q) forecaster (MADlib `arima` counterpart), hand-rolled
+conditional least squares — pure AR (q=0) uses a closed-form normal-equation
+solve (exact, no tuning); ARMA with q>0 uses gradient descent with
+central-difference gradients. `predict` takes a one-element feature array
+`[h]` and returns the h-step-ahead forecast (future residuals = 0,
+differencing reversed exactly).
+
+```sql
+SELECT ml_train_model('m', 'arima', '[5,9,12.2,14.76,16.808,18.446]',
+    '[[0],[0],[0],[0],[0],[0]]',   -- features are placeholder (unused)
+    '{"p": 1, "d": 0, "q": 0}');
+
+SELECT ml_predict_batch_value('m', '[[1]]');
+-- one-step forecast, e.g. 19.757 (matches y_t = 5 + 0.8·y_{t-1} exactly)
+```
+
+Hyperparameters: `p`/`d`/`q` (AR order / differencing / MA order, defaults
+1/0/0), `lr` (default 0.05, ARMA only), `max_epochs` (default 1000, ARMA
+only). Forecast horizon must be in [1, 100000].
 
 ## Complete Pipeline Example
 

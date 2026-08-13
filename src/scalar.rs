@@ -65,7 +65,6 @@ impl VArrowScalar for TrainModelFn {
 /// ml_predict_batch_value(model, features_json) → VARCHAR
 /// Batch prediction; returns a JSON array of predictions, e.g. '[0.5,0.5]'.
 pub struct PredictBatchValueFn;
-
 impl VArrowScalar for PredictBatchValueFn {
     type State = ();
 
@@ -126,6 +125,35 @@ impl VArrowScalar for PredictBatchValueFn {
 ///   {"coefficients":[b1,b2,...], "intercept":b0, "r_squared":.., "mse":..,
 ///    "n_samples":N, "n_features":K}
 pub struct OlsFn;
+
+/// ml_cox_train(model, time_json, event_json, features_json, params_json) → VARCHAR
+/// Cox proportional hazards training with separate time/event arrays.
+pub struct CoxTrainFn;
+
+impl VArrowScalar for CoxTrainFn {
+    type State = ();
+
+    fn invoke(_state: &Self::State, input: RecordBatch) -> Result<ArrayRef, Box<dyn Error>> {
+        let n = input.num_rows();
+        let model = col_str(&input, 0)?;
+        let time = col_str(&input, 1)?;
+        let event = col_str(&input, 2)?;
+        let features = col_str(&input, 3)?;
+        let params = col_str(&input, 4)?;
+
+        crate::train::table_fn::cox_train_and_register(model, time, event, features, params)?;
+
+        let out = StringArray::from(vec![Some(model.to_string()); n]);
+        Ok(Arc::new(out))
+    }
+
+    fn signatures() -> Vec<ArrowFunctionSignature> {
+        vec![ArrowFunctionSignature::exact(
+            vec![DataType::Utf8; 5],
+            DataType::Utf8,
+        )]
+    }
+}
 
 fn parse_f64_json(s: &str) -> Result<Vec<f64>, Box<dyn Error>> {
     serde_json::from_str(s).map_err(|e| format!("Invalid JSON array '{s}': {e}").into())

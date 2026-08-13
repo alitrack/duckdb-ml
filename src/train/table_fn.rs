@@ -262,6 +262,37 @@ pub fn train_and_register(
     ))
 }
 
+/// Train a Cox proportional hazards model with separate time/event arrays and
+/// register it under `model_name`. Returns the model name on success.
+pub fn cox_train_and_register(
+    model_name: &str,
+    time_json: &str,
+    event_json: &str,
+    features_json: &str,
+    params_json: &str,
+) -> Result<String, Box<dyn Error>> {
+    use crate::model::cox::CoxMlModel;
+    use crate::train::cox;
+
+    let x: Vec<Vec<f64>> =
+        serde_json::from_str(features_json).map_err(|e| format!("Invalid features JSON: {e}"))?;
+    let time: Vec<f64> =
+        serde_json::from_str(time_json).map_err(|e| format!("Invalid time JSON: {e}"))?;
+    let event: Vec<f64> =
+        serde_json::from_str(event_json).map_err(|e| format!("Invalid event JSON: {e}"))?;
+    if x.is_empty() || time.is_empty() {
+        return Err("Training data is empty".into());
+    }
+    let params: HashMap<String, f64> = serde_json::from_str(params_json).unwrap_or_default();
+    let lr = params.get("lr").copied().unwrap_or(0.05);
+    let max_epochs = params.get("max_epochs").copied().unwrap_or(2000.0) as usize;
+
+    let m = cox::train(&x, &time, &event, lr, max_epochs)
+        .map_err(|e| -> Box<dyn Error> { format!("cox: {e}").into() })?;
+    global_registry().insert(model_name.to_string(), Arc::new(CoxMlModel::new(m)));
+    Ok(model_name.to_string())
+}
+
 /// Deserialize a blob into an MlModel and return as Arc
 fn register_from_blob(
     algorithm: Algorithm,
@@ -271,6 +302,8 @@ fn register_from_blob(
     blob: &[u8],
 ) -> Result<Arc<dyn crate::model::MlModel>, Box<dyn Error>> {
     use crate::model::{
+        arima::ArimaMlModel,
+        cox::CoxMlModel,
         dbscan::DbscanModel,
         kmeans::KMeansModel,
         knn::KnnMlModel,
@@ -278,6 +311,7 @@ fn register_from_blob(
         logistic::LogisticModel,
         multilogistic::MultilogisticModel,
         naive_bayes::NbMlModel,
+        ordinal::OrdinalMlModel,
         pca::PcaMlModel,
         svm::SvmModel,
         tree::{ForestModel, TreeModel},
@@ -308,6 +342,9 @@ fn register_from_blob(
             Arc::new(MultilogisticModel::deserialize(blob)?)
         }
         Algorithm::SVM => Arc::new(SvmModel::deserialize(blob)?),
+        Algorithm::OrdinalLogisticRegression => Arc::new(OrdinalMlModel::deserialize(blob)?),
+        Algorithm::CoxProportionalHazards => Arc::new(CoxMlModel::deserialize(blob)?),
+        Algorithm::Arima => Arc::new(ArimaMlModel::deserialize(blob)?),
         Algorithm::KNNRegressor | Algorithm::KNNClassifier => {
             Arc::new(KnnMlModel::deserialize(blob)?)
         }

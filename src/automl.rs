@@ -112,6 +112,8 @@ impl VTab for CompareFn {
             match train::train(algorithm, &x, &y, &params) {
                 Ok(result) => {
                     use crate::model::{
+                        arima::ArimaMlModel,
+                        cox::CoxMlModel,
                         dbscan::DbscanModel,
                         kmeans::KMeansModel,
                         knn::KnnMlModel,
@@ -119,6 +121,7 @@ impl VTab for CompareFn {
                         logistic::LogisticModel,
                         multilogistic::MultilogisticModel,
                         naive_bayes::NbMlModel,
+                        ordinal::OrdinalMlModel,
                         pca::PcaMlModel,
                         svm::SvmModel,
                         tree::{ForestModel, TreeModel},
@@ -147,6 +150,17 @@ impl VTab for CompareFn {
                                         .map(|m| Arc::new(m) as Arc<dyn MlModel>)
                                 }
                                 Algorithm::SVM => SvmModel::deserialize(blob)
+                                    .ok()
+                                    .map(|m| Arc::new(m) as Arc<dyn MlModel>),
+                                Algorithm::OrdinalLogisticRegression => {
+                                    OrdinalMlModel::deserialize(blob)
+                                        .ok()
+                                        .map(|m| Arc::new(m) as Arc<dyn MlModel>)
+                                }
+                                Algorithm::CoxProportionalHazards => CoxMlModel::deserialize(blob)
+                                    .ok()
+                                    .map(|m| Arc::new(m) as Arc<dyn MlModel>),
+                                Algorithm::Arima => ArimaMlModel::deserialize(blob)
                                     .ok()
                                     .map(|m| Arc::new(m) as Arc<dyn MlModel>),
                                 Algorithm::KNNRegressor | Algorithm::KNNClassifier => {
