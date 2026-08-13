@@ -43,7 +43,7 @@ SELECT ml_assoc_rules(
     0.6);  -- min_confidence (fraction)
 ```
 
-## Algorithms (18)
+## Algorithms (19)
 
 | Category | Algorithms |
 |----------|-----------|
@@ -53,9 +53,56 @@ SELECT ml_assoc_rules(
 | **Neural** | `mlp_regressor` (1-layer, ReLU, SGD+momentum) |
 | **Distance** | `knn_regressor`, `knn_classifier` |
 | **Bayesian** | `naive_bayes` |
-| **Clustering** | `kmeans` |
+| **Clustering** | `kmeans`, `dbscan` (density-based, noise detection, linfa-clustering) |
 | **Dim Reduction** | `pca` |
 | **External** | `xgboost_regressor`, `xgboost_classifier` (load via `ml_load_xgboost`), `onnx` (load via `ml_load_onnx`) |
+
+## Metrics & Model Validation
+
+Model-quality tools (MADlib `pred_metrics` / `validation` counterparts):
+
+```sql
+-- Binary classification: confusion matrix, accuracy, precision, recall, F1, ROC AUC
+SELECT ml_metrics('[1,0,1,0,1]', '[0.9,0.1,0.8,0.3,0.6]', 'binary');
+
+-- Regression: MSE, RMSE, MAE, R²
+SELECT ml_metrics('[1.0,2.0,3.0]', '[0.9,2.2,3.1]', 'regression');
+
+-- Auto task detection (actuals ∈ {0,1} → binary, else regression)
+SELECT ml_metrics('[1,0,1]', '[1,1,0]');
+
+-- K-fold cross validation over any ml_train_model algorithm
+SELECT ml_cross_validate('linear_regression',
+    '[[0.0],[1.0],[2.0],[3.0],[4.0],[5.0]]',
+    '[1.0,3.0,5.0,7.0,9.0,11.0]',
+    '{"lambda": 0.1}',  -- hyperparameters, or NULL
+    '5');               -- folds (optional, default 5)
+```
+
+- `ml_metrics`: binary accepts labels **or probabilities** (threshold 0.5 for
+  the confusion matrix; ROC AUC uses the raw scores with tie handling).
+- `ml_cross_validate`: deterministic sequential folds (fold f = indices with
+  `i % k == f`); returns per-fold and mean `mse`/`r2`.
+
+## DBSCAN Clustering
+
+Density-based clustering with noise detection, powered by
+[linfa-clustering](https://crates.io/crates/linfa-clustering) (MIT).
+`eps` is the neighborhood radius, `min_points` the core-point density;
+points with fewer than `min_points` neighbors are noise.
+
+```sql
+-- Train (unsupervised: y is a dummy column, ignored by dbscan)
+SELECT ml_train_model('m', 'dbscan', '[1,1,1,1]',
+    '[[0.0,0.0],[0.1,0.0],[5.0,5.0],[5.1,5.0]]',
+    '{"eps": 0.3, "min_points": 2}');
+
+-- Predict: nearest cluster representative (MADlib-style, noise → closest)
+SELECT ml_predict_batch_value('m', '[[0.05,0.05],[5.0,5.1]]');
+```
+
+The trained model stores per-cluster means + counts; `ml_predict_batch_value`
+returns the nearest-cluster label (0..k-1).
 
 ## Complete Pipeline Example
 
@@ -97,6 +144,7 @@ SELECT * FROM ml_list_models;
 - **Experiment Tracking** — DuckDB-native tables (`duckdb_ml.experiments`, `runs`, `metrics`, `params`)
 - **Embeddings** — `ml_embed` (ONNX encoder → f32 LE BLOB, per-row, UPDATE-friendly) + `ml_similarity_value` (full-scan cosine Top-K with threshold, k cap 10000, skip/warning stats, cancellation flag)
 - **Association Rules** — `ml_assoc_rules` (Apriori, market basket): support/confidence/lift, min_support + min_confidence filters, itemset-size cap, candidate/rule blowup guards, cancellation flag
+- **Model Metrics & Validation** — `ml_metrics` (confusion matrix / PR / F1 / ROC AUC / MSE / MAE / R² with auto task detection) + `ml_cross_validate` (k-fold over any algorithm, deterministic folds)
 
 ## Association Rules (Apriori)
 
@@ -193,6 +241,8 @@ flowchart TD
     B --> H[ml_embed → BLOB column]
     H --> I[ml_similarity_value: full-scan cosine Top-K]
     J[orders table] --> K[ml_assoc_rules: Apriori support/confidence/lift]
+    L[features] --> M[ml_metrics: CM/PR/F1/ROC-AUC or MSE/R2]
+    N[features + labels] --> O[ml_cross_validate: k-fold over train family]
 ```
 
 All models live in a thread-safe global registry (LRU cache, 100 model limit).

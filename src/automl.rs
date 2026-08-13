@@ -6,12 +6,12 @@
 //! Trains all specified (or auto-selected) algorithms, registers them in the
 //! global registry, and returns a comparison table.
 
-use crate::model::{Algorithm, global_registry};
+use crate::model::{global_registry, Algorithm};
 use crate::train;
 use duckdb::{
-    Result,
     core::{DataChunkHandle, LogicalTypeHandle, LogicalTypeId},
-    vtab::{BindInfo, InitInfo, TableFunctionInfo, VTab, arrow::record_batch_to_duckdb_data_chunk},
+    vtab::{arrow::record_batch_to_duckdb_data_chunk, BindInfo, InitInfo, TableFunctionInfo, VTab},
+    Result,
 };
 use std::collections::HashMap;
 use std::error::Error;
@@ -112,7 +112,7 @@ impl VTab for CompareFn {
             match train::train(algorithm, &x, &y, &params) {
                 Ok(result) => {
                     use crate::model::{
-                        MlModel,
+                        dbscan::DbscanModel,
                         kmeans::KMeansModel,
                         knn::KnnMlModel,
                         linear::LinearModel,
@@ -120,6 +120,7 @@ impl VTab for CompareFn {
                         naive_bayes::NbMlModel,
                         pca::PcaMlModel,
                         tree::{ForestModel, TreeModel},
+                        MlModel,
                     };
                     use std::sync::Arc;
 
@@ -133,6 +134,9 @@ impl VTab for CompareFn {
                                     .ok()
                                     .map(|m| Arc::new(m) as Arc<dyn MlModel>),
                                 Algorithm::KMeans => KMeansModel::deserialize(blob)
+                                    .ok()
+                                    .map(|m| Arc::new(m) as Arc<dyn MlModel>),
+                                Algorithm::DBSCAN => DbscanModel::deserialize(blob)
                                     .ok()
                                     .map(|m| Arc::new(m) as Arc<dyn MlModel>),
                                 Algorithm::KNNRegressor | Algorithm::KNNClassifier => {

@@ -9,18 +9,18 @@
 //!   3: features — JSON array of arrays, e.g. "[[1.0,2.0],[3.0,4.0],[5.0,6.0]]"
 //!   4: params_json (optional) — JSON object, e.g. '{"lr": 0.01}'
 
-use crate::model::{Algorithm, global_registry};
+use crate::model::{global_registry, Algorithm};
 use crate::train;
 use duckdb::{
-    Result,
     core::{DataChunkHandle, LogicalTypeHandle, LogicalTypeId},
-    vtab::{BindInfo, InitInfo, TableFunctionInfo, VTab, arrow::record_batch_to_duckdb_data_chunk},
+    vtab::{arrow::record_batch_to_duckdb_data_chunk, BindInfo, InitInfo, TableFunctionInfo, VTab},
+    Result,
 };
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Write;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 #[repr(C)]
 pub struct TInitData {
@@ -59,8 +59,13 @@ impl VTab for TrainFn {
             "{}".into()
         };
 
-        let (model_name, algorithm_str, r_squared, mse, n_samples, n_feat) =
-            train_and_register(&model_name, &algorithm_str, &target_json, &features_json, &params_json)?;
+        let (model_name, algorithm_str, r_squared, mse, n_samples, n_feat) = train_and_register(
+            &model_name,
+            &algorithm_str,
+            &target_json,
+            &features_json,
+            &params_json,
+        )?;
 
         bind.add_result_column(
             "model_name",
@@ -85,7 +90,7 @@ impl VTab for TrainFn {
         })
     }
 
-fn init(_: &InitInfo) -> Result<Self::InitData, Box<dyn Error>> {
+    fn init(_: &InitInfo) -> Result<Self::InitData, Box<dyn Error>> {
         Ok(TInitData {
             done: AtomicBool::new(false),
         })
@@ -178,8 +183,8 @@ pub fn train_and_register(
                 .collect()
         }
     };
-    let x: Vec<Vec<f64>> = serde_json::from_str(features_json)
-        .map_err(|e| format!("Invalid features JSON: {e}"))?;
+    let x: Vec<Vec<f64>> =
+        serde_json::from_str(features_json).map_err(|e| format!("Invalid features JSON: {e}"))?;
 
     if x.is_empty() || y.is_empty() {
         return Err("Training data is empty".into());
@@ -216,15 +221,13 @@ pub fn train_and_register(
         use crate::model::{lasso::LassoModel, linear::LinearModel, logistic::LogisticModel};
         let lambda = params.get("lambda").copied().unwrap_or(0.0);
         let model: Arc<dyn crate::model::MlModel> = match algorithm {
-            Algorithm::LinearRegression | Algorithm::RidgeRegression => {
-                Arc::new(LinearModel::new(
-                    result.coefficients,
-                    n_samples,
-                    result.r_squared,
-                    result.mse,
-                    lambda,
-                ))
-            }
+            Algorithm::LinearRegression | Algorithm::RidgeRegression => Arc::new(LinearModel::new(
+                result.coefficients,
+                n_samples,
+                result.r_squared,
+                result.mse,
+                lambda,
+            )),
             Algorithm::LogisticRegression => Arc::new(LogisticModel::new(
                 result.coefficients,
                 n_samples,
@@ -268,7 +271,7 @@ fn register_from_blob(
     blob: &[u8],
 ) -> Result<Arc<dyn crate::model::MlModel>, Box<dyn Error>> {
     use crate::model::{
-        MlModel,
+        dbscan::DbscanModel,
         kmeans::KMeansModel,
         knn::KnnMlModel,
         linear::LinearModel,
@@ -276,6 +279,7 @@ fn register_from_blob(
         naive_bayes::NbMlModel,
         pca::PcaMlModel,
         tree::{ForestModel, TreeModel},
+        MlModel,
     };
 
     #[cfg(feature = "onnx")]
@@ -297,6 +301,7 @@ fn register_from_blob(
         Algorithm::DecisionTreeRegressor => Arc::new(TreeModel::deserialize(blob)?),
         Algorithm::RandomForestRegressor => Arc::new(ForestModel::deserialize(blob)?),
         Algorithm::KMeans => Arc::new(KMeansModel::deserialize(blob)?),
+        Algorithm::DBSCAN => Arc::new(DbscanModel::deserialize(blob)?),
         Algorithm::KNNRegressor | Algorithm::KNNClassifier => {
             Arc::new(KnnMlModel::deserialize(blob)?)
         }

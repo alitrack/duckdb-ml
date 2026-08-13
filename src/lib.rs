@@ -1,8 +1,10 @@
 pub mod assoc_rules;
 pub mod automl;
+pub mod cross_validate;
 pub mod deploy;
 pub mod embed;
 pub mod load;
+pub mod metrics;
 pub mod model;
 pub mod predict;
 pub mod scalar;
@@ -50,6 +52,8 @@ pub unsafe fn ml_init(con: Connection) -> Result<(), Box<dyn Error>> {
     con.register_scalar_function::<embed::EmbedFn>("ml_embed")?;
     con.register_scalar_function::<embed::SimilarityFn>("ml_similarity_value")?;
     con.register_scalar_function::<assoc_rules::AssocRulesFn>("ml_assoc_rules")?;
+    con.register_scalar_function::<metrics::MetricsFn>("ml_metrics")?;
+    con.register_scalar_function::<cross_validate::CrossValidateFn>("ml_cross_validate")?;
 
     log::info!("duckdb_ml initialized successfully");
     Ok(())

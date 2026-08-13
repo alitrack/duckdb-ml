@@ -22,6 +22,7 @@ pub enum Algorithm {
     PCA,
     LassoRegression,
     MlpRegressor,
+    DBSCAN,
 }
 
 impl std::fmt::Display for Algorithm {
@@ -44,6 +45,7 @@ impl std::fmt::Display for Algorithm {
             Algorithm::PCA => write!(f, "pca"),
             Algorithm::LassoRegression => write!(f, "lasso_regression"),
             Algorithm::MlpRegressor => write!(f, "mlp_regressor"),
+            Algorithm::DBSCAN => write!(f, "dbscan"),
         }
     }
 }
@@ -68,6 +70,7 @@ impl Algorithm {
             "pca" => Some(Algorithm::PCA),
             "lasso_regression" => Some(Algorithm::LassoRegression),
             "mlp_regressor" => Some(Algorithm::MlpRegressor),
+            "dbscan" => Some(Algorithm::DBSCAN),
             _ => None,
         }
     }

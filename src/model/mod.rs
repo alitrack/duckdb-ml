@@ -1,3 +1,4 @@
+pub mod dbscan;
 pub mod kmeans;
 pub mod knn;
 pub mod lasso;
@@ -13,8 +14,8 @@ pub mod xgboost;
 #[cfg(feature = "onnx")]
 pub mod onnx;
 
-pub use registry::ModelRegistry;
 pub use registry::global_registry;
+pub use registry::ModelRegistry;
 
 mod types;
 pub use types::*;

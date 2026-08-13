@@ -18,6 +18,9 @@ thiserror = "2"
 # Optional ONNX support
 ort = { version = "2.0.0-rc.12", optional = true }
 sha2 = "0.11.0"
+linfa-clustering = "0.8.1"
+ndarray = "0.16"
+linfa = "0.8.1"
 
 [features]
 default = []

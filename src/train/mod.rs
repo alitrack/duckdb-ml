@@ -1,3 +1,4 @@
+pub mod dbscan;
 pub mod gbdt;
 pub mod kmeans;
 pub mod lasso;
@@ -129,6 +130,26 @@ pub fn train(
                 "XGBoost models trained outside DuckDB. Use 'xgboost_regression' or 'xgboost_binary' for in-DB training."
                     .into(),
             )
+        }
+        Algorithm::DBSCAN => {
+            let eps = params.get("eps").copied().unwrap_or(0.5);
+            let min_points = params.get("min_points").copied().unwrap_or(5.0) as usize;
+            let result = dbscan::train(x, eps, min_points)
+                .map_err(|e| -> Box<dyn Error> { format!("dbscan: {e}").into() })?;
+            let blob = dbscan::serialize(&result.clusters, x[0].len(), eps);
+            let noise_ratio = if x.is_empty() {
+                0.0
+            } else {
+                result.noise_count as f64 / x.len() as f64
+            };
+            Ok(TrainingResult {
+                coefficients: vec![],
+                intercept: 0.0,
+                r_squared: None,
+                mse: Some(noise_ratio),
+                num_samples: x.len(),
+                model_blob: Some(blob),
+            })
         }
         Algorithm::KMeans => {
             let k = params.get("k").copied().unwrap_or(3.0) as usize;
