@@ -5,6 +5,7 @@ pub mod lasso;
 pub mod linear;
 pub mod logistic;
 pub mod mlp;
+pub mod multilogistic;
 pub mod svm;
 pub mod table_fn;
 pub mod tree;
@@ -148,6 +149,28 @@ pub fn train(
                 intercept: 0.0,
                 r_squared: None,
                 mse: Some(noise_ratio),
+                num_samples: x.len(),
+                model_blob: Some(blob),
+            })
+        }
+        Algorithm::MultinomialLogisticRegression => {
+            let lr = params.get("lr").copied().unwrap_or(0.1);
+            let max_epochs = params.get("max_epochs").copied().unwrap_or(500.0) as usize;
+            let m = multilogistic::train(x, y, lr, max_epochs)
+                .map_err(|e| -> Box<dyn Error> { format!("multilogistic: {e}").into() })?;
+            let blob = multilogistic::serialize(&m);
+            // accuracy on training data
+            let mut correct = 0;
+            for i in 0..x.len() {
+                if multilogistic::predict_one(&m, &x[i]) == y[i] {
+                    correct += 1;
+                }
+            }
+            Ok(TrainingResult {
+                coefficients: vec![],
+                intercept: 0.0,
+                r_squared: Some(correct as f64 / x.len() as f64),
+                mse: None,
                 num_samples: x.len(),
                 model_blob: Some(blob),
             })

@@ -43,11 +43,12 @@ SELECT ml_assoc_rules(
     0.6);  -- min_confidence (fraction)
 ```
 
-## Algorithms (20)
+## Algorithms (21)
 
 | Category | Algorithms |
 |----------|-----------|
 | **Linear** | `linear_regression`, `ridge_regression`, `lasso_regression` |
+| **Generalized Linear** | `logistic_regression` (binary), `multilogistic` (softmax multi-class, any numeric labels) |
 | **Tree** | `decision_tree`, `random_forest` |
 | **Gradient Boosting** | `xgboost_regression`, `xgboost_binary` (pure-Rust GBDT) |
 | **Neural** | `mlp_regressor` (1-layer, ReLU, SGD+momentum) |
@@ -130,6 +131,25 @@ Hyperparameters: `c` (misclassification penalty, default 1.0),
 The trained model embeds support vectors + dual coefficients via bincode
 (serde); prediction reuses linfa's own decision path. Model blob includes the
 feature count, so `ml_predict_batch_value` validates dimensions.
+
+## Multinomial Logistic Regression (multilogistic)
+
+Softmax multi-class classifier (MADlib `multilogistic` counterpart),
+hand-rolled full-batch gradient descent over cross-entropy — no new deps.
+Class labels can be **any distinct numbers** (e.g. 10/20/30); `predict`
+returns the original label values.
+
+```sql
+SELECT ml_train_model('m', 'multilogistic', '[10,10,20,20,30,30]',
+    '[[-5.0],[-4.9],[0.0],[0.1],[5.0],[5.1]]',
+    '{"lr": 0.1, "max_epochs": 1000}');
+
+SELECT ml_predict_batch_value('m', '[[-4.0],[4.0],[0.2]]');
+-- [10.0, 30.0, 20.0]
+```
+
+Hyperparameters: `lr` (learning rate, default 0.1), `max_epochs` (default 500,
+early-stops on loss plateau). Training is deterministic (zero-init weights).
 
 ## Complete Pipeline Example
 

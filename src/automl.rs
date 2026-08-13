@@ -117,6 +117,7 @@ impl VTab for CompareFn {
                         knn::KnnMlModel,
                         linear::LinearModel,
                         logistic::LogisticModel,
+                        multilogistic::MultilogisticModel,
                         naive_bayes::NbMlModel,
                         pca::PcaMlModel,
                         svm::SvmModel,
@@ -140,6 +141,11 @@ impl VTab for CompareFn {
                                 Algorithm::DBSCAN => DbscanModel::deserialize(blob)
                                     .ok()
                                     .map(|m| Arc::new(m) as Arc<dyn MlModel>),
+                                Algorithm::MultinomialLogisticRegression => {
+                                    MultilogisticModel::deserialize(blob)
+                                        .ok()
+                                        .map(|m| Arc::new(m) as Arc<dyn MlModel>)
+                                }
                                 Algorithm::SVM => SvmModel::deserialize(blob)
                                     .ok()
                                     .map(|m| Arc::new(m) as Arc<dyn MlModel>),

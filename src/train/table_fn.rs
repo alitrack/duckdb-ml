@@ -276,6 +276,7 @@ fn register_from_blob(
         knn::KnnMlModel,
         linear::LinearModel,
         logistic::LogisticModel,
+        multilogistic::MultilogisticModel,
         naive_bayes::NbMlModel,
         pca::PcaMlModel,
         svm::SvmModel,
@@ -303,6 +304,9 @@ fn register_from_blob(
         Algorithm::RandomForestRegressor => Arc::new(ForestModel::deserialize(blob)?),
         Algorithm::KMeans => Arc::new(KMeansModel::deserialize(blob)?),
         Algorithm::DBSCAN => Arc::new(DbscanModel::deserialize(blob)?),
+        Algorithm::MultinomialLogisticRegression => {
+            Arc::new(MultilogisticModel::deserialize(blob)?)
+        }
         Algorithm::SVM => Arc::new(SvmModel::deserialize(blob)?),
         Algorithm::KNNRegressor | Algorithm::KNNClassifier => {
             Arc::new(KnnMlModel::deserialize(blob)?)
