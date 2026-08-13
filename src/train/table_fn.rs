@@ -344,7 +344,7 @@ fn register_from_blob(
         ordinal::OrdinalMlModel,
         pca::PcaMlModel,
         svm::SvmModel,
-        tree::{ForestModel, TreeModel},
+        tree::{ForestClassifierModel, ForestModel, TreeModel},
         MlModel,
     };
 
@@ -376,6 +376,7 @@ fn register_from_blob(
         Algorithm::LogisticRegression => Arc::new(LogisticModel::deserialize(blob)?),
         Algorithm::DecisionTreeRegressor => Arc::new(TreeModel::deserialize(blob)?),
         Algorithm::RandomForestRegressor => Arc::new(ForestModel::deserialize(blob)?),
+        Algorithm::RandomForestClassifier => Arc::new(ForestClassifierModel::deserialize(blob)?),
         Algorithm::KMeans => Arc::new(KMeansModel::deserialize(blob)?),
         Algorithm::DBSCAN => Arc::new(DbscanModel::deserialize(blob)?),
         Algorithm::MultinomialLogisticRegression => {

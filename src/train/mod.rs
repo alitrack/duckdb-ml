@@ -16,6 +16,25 @@ pub mod svr;
 pub mod table_fn;
 pub mod tree;
 
+/// Serialize a forest (tree list) to the model blob format:
+/// num_features u32 · tree_count u32 · per-tree [len u32, tree bytes]
+fn forest_model_to_blob(
+    trees: &[tree::TreeNode],
+    n_features: usize,
+) -> Result<Vec<u8>, Box<dyn Error>> {
+    let mut buf = Vec::new();
+    buf.extend_from_slice(&(n_features as u32).to_le_bytes());
+    let count = trees.len() as u32;
+    buf.extend_from_slice(&count.to_le_bytes());
+    for t in trees {
+        let tb = t.to_bytes();
+        let len = tb.len() as u32;
+        buf.extend_from_slice(&len.to_le_bytes());
+        buf.extend_from_slice(&tb);
+    }
+    Ok(buf)
+}
+
 use crate::model::Algorithm;
 
 use std::error::Error;
@@ -101,30 +120,39 @@ pub fn train(
             let max_depth = params.get("max_depth").copied().unwrap_or(10.0) as usize;
             let tp = tree::TreeParams {
                 max_depth,
-                min_samples_split: params.get("min_samples_split").copied().unwrap_or(5.0) as usize,
-                min_samples_leaf: params.get("min_samples_leaf").copied().unwrap_or(2.0) as usize,
+                min_samples_split: params.get("min_samples_split").copied().unwrap_or(2.0) as usize,
+                min_samples_leaf: params.get("min_samples_leaf").copied().unwrap_or(1.0) as usize,
                 max_features: None,
             };
             let forest = tree::RandomForest::train(x, y, n_estimators, &tp);
-            // Serialize forest
-            let mut buf = Vec::new();
-            // Header: num_features (4 bytes)
-            buf.extend_from_slice(&(x[0].len() as u32).to_le_bytes());
-            let count = forest.trees.len() as u32;
-            buf.extend_from_slice(&count.to_le_bytes());
-            for t in &forest.trees {
-                let tb = t.to_bytes();
-                let len = tb.len() as u32;
-                buf.extend_from_slice(&len.to_le_bytes());
-                buf.extend_from_slice(&tb);
-            }
+            let blob = forest_model_to_blob(&forest.trees, x[0].len())?;
             Ok(TrainingResult {
                 coefficients: vec![],
                 intercept: 0.0,
                 r_squared: None,
                 mse: None,
-                num_samples: x.len(),
-                model_blob: Some(buf),
+                num_samples: y.len(),
+                model_blob: Some(blob),
+            })
+        }
+        Algorithm::RandomForestClassifier => {
+            let n_estimators = params.get("n_estimators").copied().unwrap_or(100.0) as usize;
+            let max_depth = params.get("max_depth").copied().unwrap_or(10.0) as usize;
+            let tp = tree::TreeParams {
+                max_depth,
+                min_samples_split: params.get("min_samples_split").copied().unwrap_or(2.0) as usize,
+                min_samples_leaf: params.get("min_samples_leaf").copied().unwrap_or(1.0) as usize,
+                max_features: None,
+            };
+            let forest = tree::RandomForestClassifier::train(x, y, n_estimators, &tp);
+            let blob = forest_model_to_blob(&forest.trees, x[0].len())?;
+            Ok(TrainingResult {
+                coefficients: vec![],
+                intercept: 0.0,
+                r_squared: None,
+                mse: None,
+                num_samples: y.len(),
+                model_blob: Some(blob),
             })
         }
         Algorithm::Onnx => Err(

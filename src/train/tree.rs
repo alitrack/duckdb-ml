@@ -36,10 +36,54 @@ impl Default for TreeParams {
     }
 }
 
+/// Split criterion: MSE (regression) or Gini impurity (classification)
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SplitCriterion {
+    Mse,
+    Gini,
+}
+
 /// Build a single CART regression tree
 pub fn build_tree(x: &[Vec<f64>], y: &[f64], params: &TreeParams) -> TreeNode {
     let indices: Vec<usize> = (0..x.len()).collect();
-    build_node(x, y, &indices, params, 0)
+    build_node(x, y, &indices, params, 0, SplitCriterion::Mse)
+}
+
+/// Build a single CART classification tree (Gini splits, majority leaves)
+pub fn build_tree_classifier(x: &[Vec<f64>], y: &[f64], params: &TreeParams) -> TreeNode {
+    let indices: Vec<usize> = (0..x.len()).collect();
+    build_node(x, y, &indices, params, 0, SplitCriterion::Gini)
+}
+
+fn majority_value(y: &[f64], indices: &[usize]) -> f64 {
+    use std::collections::HashMap;
+    let mut counts: HashMap<i64, usize> = HashMap::new();
+    for &i in indices {
+        *counts.entry(y[i] as i64).or_insert(0) += 1;
+    }
+    let mut best = (y[indices[0]] as i64, 0usize);
+    for (class, &n) in &counts {
+        // tie-break: smaller class label wins (deterministic)
+        if n > best.1 || (n == best.1 && *class < best.0) {
+            best = (*class, n);
+        }
+    }
+    best.0 as f64
+}
+
+fn gini(y: &[f64], indices: &[usize]) -> f64 {
+    use std::collections::HashMap;
+    let mut counts: HashMap<i64, usize> = HashMap::new();
+    for &i in indices {
+        *counts.entry(y[i] as i64).or_insert(0) += 1;
+    }
+    let n = indices.len() as f64;
+    let mut impurity = 1.0;
+    for &c in counts.values() {
+        let p = c as f64 / n;
+        impurity -= p * p;
+    }
+    impurity
 }
 
 fn build_node(
@@ -48,9 +92,13 @@ fn build_node(
     indices: &[usize],
     params: &TreeParams,
     depth: usize,
+    criterion: SplitCriterion,
 ) -> TreeNode {
-    // Compute leaf value: mean of targets
-    let leaf_value = indices.iter().map(|&i| y[i]).sum::<f64>() / indices.len() as f64;
+    // Compute leaf value: mean of targets (regression) or majority class (classification)
+    let leaf_value = match criterion {
+        SplitCriterion::Mse => indices.iter().map(|&i| y[i]).sum::<f64>() / indices.len() as f64,
+        SplitCriterion::Gini => majority_value(y, indices),
+    };
 
     // Stop criteria
     if indices.len() < params.min_samples_split
@@ -80,7 +128,7 @@ fn build_node(
     // Find best split
     let mut best_feature = 0;
     let mut best_threshold = 0.0;
-    let mut best_mse = f64::MAX;
+    let mut best_score = f64::MAX;
     let mut best_left: Vec<usize> = vec![];
     let mut best_right: Vec<usize> = vec![];
 
@@ -109,20 +157,27 @@ fn build_node(
                 continue;
             }
 
-            // Compute MSE for this split
-            let left_mean = left.iter().map(|&i| y[i]).sum::<f64>() / left.len() as f64;
-            let right_mean = right.iter().map(|&i| y[i]).sum::<f64>() / right.len() as f64;
-            let mse = left
-                .iter()
-                .map(|&i| (y[i] - left_mean).powi(2))
-                .sum::<f64>()
-                + right
-                    .iter()
-                    .map(|&i| (y[i] - right_mean).powi(2))
-                    .sum::<f64>();
+            // Compute split score for this candidate threshold
+            let score = match criterion {
+                SplitCriterion::Mse => {
+                    let left_mean = left.iter().map(|&i| y[i]).sum::<f64>() / left.len() as f64;
+                    let right_mean = right.iter().map(|&i| y[i]).sum::<f64>() / right.len() as f64;
+                    left.iter()
+                        .map(|&i| (y[i] - left_mean).powi(2))
+                        .sum::<f64>()
+                        + right
+                            .iter()
+                            .map(|&i| (y[i] - right_mean).powi(2))
+                            .sum::<f64>()
+                }
+                SplitCriterion::Gini => {
+                    (left.len() as f64 * gini(y, &left) + right.len() as f64 * gini(y, &right))
+                        / indices.len() as f64
+                }
+            };
 
-            if mse < best_mse {
-                best_mse = mse;
+            if score < best_score {
+                best_score = score;
                 best_feature = f_idx;
                 best_threshold = threshold;
                 best_left = left;
@@ -137,8 +192,8 @@ fn build_node(
     }
 
     // Recurse
-    let left_child = build_node(x, y, &best_left, params, depth + 1);
-    let right_child = build_node(x, y, &best_right, params, depth + 1);
+    let left_child = build_node(x, y, &best_left, params, depth + 1, criterion);
+    let right_child = build_node(x, y, &best_right, params, depth + 1, criterion);
 
     TreeNode::Split {
         feature_index: best_feature,
@@ -201,6 +256,51 @@ impl RandomForest {
     pub fn predict(&self, features: &[f64]) -> f64 {
         let sum: f64 = self.trees.iter().map(|t| predict_tree(t, features)).sum();
         sum / self.trees.len() as f64
+    }
+}
+
+/// Random Forest classifier ensemble (Gini trees, majority-vote prediction)
+pub struct RandomForestClassifier {
+    pub trees: Vec<TreeNode>,
+}
+
+impl RandomForestClassifier {
+    /// Train a random forest classifier. `y` must be class labels (0, 1, …).
+    pub fn train(x: &[Vec<f64>], y: &[f64], n_estimators: usize, params: &TreeParams) -> Self {
+        let n_features = x[0].len();
+        let n_samples = x.len();
+
+        // max_features for classification: sqrt(n_features) (rounded up)
+        let max_features = (n_features as f64).sqrt().ceil() as usize;
+
+        let mut tree_params = params.clone();
+        tree_params.max_features = Some(max_features);
+
+        let mut trees = Vec::with_capacity(n_estimators);
+
+        for _ in 0..n_estimators {
+            let (bs_x, bs_y) = bootstrap_sample(x, y, n_samples);
+            let tree = build_tree_classifier(&bs_x, &bs_y, &tree_params);
+            trees.push(tree);
+        }
+
+        Self { trees }
+    }
+
+    /// Predict: majority vote across trees (ties → smallest class label)
+    pub fn predict(&self, features: &[f64]) -> f64 {
+        use std::collections::HashMap;
+        let mut counts: HashMap<i64, usize> = HashMap::new();
+        for t in &self.trees {
+            *counts.entry(predict_tree(t, features) as i64).or_insert(0) += 1;
+        }
+        let mut best = (i64::MAX, 0usize);
+        for (class, &n) in &counts {
+            if n > best.1 || (n == best.1 && *class < best.0) {
+                best = (*class, n);
+            }
+        }
+        best.0 as f64
     }
 }
 
@@ -431,5 +531,55 @@ mod tests {
 
         let pred2 = rf.predict(&[0.0, 0.0]);
         assert!((pred2 - 0.0).abs() < 2.0, "pred={pred2}, expected ~0");
+    }
+
+    #[test]
+    fn test_random_forest_classifier_xor() {
+        // XOR: (0,0)->0, (1,1)->0, (0,1)->1, (1,0)->1
+        let base_x: Vec<Vec<f64>> = vec![
+            vec![0.0, 0.0],
+            vec![0.0, 1.0],
+            vec![1.0, 0.0],
+            vec![1.0, 1.0],
+        ];
+        let base_y: Vec<f64> = vec![0.0, 1.0, 1.0, 0.0];
+        let x: Vec<Vec<f64>> = base_x.iter().cycle().take(200).cloned().collect();
+        let y: Vec<f64> = base_y.iter().cycle().take(200).cloned().collect();
+
+        let params = TreeParams {
+            max_depth: 6,
+            min_samples_split: 2,
+            min_samples_leaf: 1,
+            max_features: None, // forest sets sqrt internally
+        };
+        let rf = RandomForestClassifier::train(&x, &y, 50, &params);
+
+        assert_eq!(rf.predict(&[0.0, 0.0]), 0.0);
+        assert_eq!(rf.predict(&[1.0, 1.0]), 0.0);
+        assert_eq!(rf.predict(&[0.0, 1.0]), 1.0);
+        assert_eq!(rf.predict(&[1.0, 0.0]), 1.0);
+    }
+
+    #[test]
+    fn test_random_forest_classifier_ball() {
+        // inside circle radius 1 -> class 1, outside -> class 0
+        let mut x = Vec::new();
+        let mut y = Vec::new();
+        for i in 0..60 {
+            let a = i as f64 * 0.1;
+            let b = (i % 7) as f64 * 0.13;
+            let r = (a * a + b * b).sqrt();
+            x.push(vec![a, b]);
+            y.push(if r < 1.0 { 1.0 } else { 0.0 });
+        }
+        let params = TreeParams {
+            max_depth: 8,
+            min_samples_split: 3,
+            min_samples_leaf: 1,
+            max_features: None,
+        };
+        let rf = RandomForestClassifier::train(&x, &y, 30, &params);
+        assert_eq!(rf.predict(&[0.1, 0.1]), 1.0);
+        assert_eq!(rf.predict(&[3.0, 3.0]), 0.0);
     }
 }

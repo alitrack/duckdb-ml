@@ -43,12 +43,13 @@ SELECT ml_assoc_rules(
     0.6);  -- min_confidence (fraction)
 ```
 
-## Algorithms (27)
+## Algorithms (28)
 
 | Category | Algorithms |
 |----------|-----------|
 | **Linear** | `linear_regression`, `ridge_regression`, `lasso_regression`, `elastic_net`, `robust` (Huber IRLS, outlier-resistant) |
 | **Kernel** | `svm` (classification), `svr` (ε-SVR regression: linear/rbf/poly/sigmoid kernels, hand-written working-set SMO) |
+| **Trees** | `decision_tree`, `random_forest` (regression), `rf_classifier` (Gini splits, majority vote; string labels auto-encoded) |
 | **Generalized Linear** | `logistic_regression` (binary), `multilogistic` (softmax multi-class), `ordinal` (cumulative-logit ordered multi-class) |
 | **Survival** | `cox` (proportional hazards, via `ml_cox_train` — time/event/features) |
 | **Time Series** | `arima` (ARIMA(p,d,q) forecasting) |
