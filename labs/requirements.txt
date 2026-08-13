@@ -1,0 +1,4 @@
+duckdb==1.5.5
+numpy
+scipy
+scikit-learn

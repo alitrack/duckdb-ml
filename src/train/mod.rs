@@ -79,10 +79,18 @@ pub fn train(
                 subsample,
                 ..Default::default()
             };
-            let ensemble = gbdt::train_gbdt(x, y, &gp);
+            let gbdt_objective = match algorithm {
+                Algorithm::XGBoostBinary => gbdt::GbdtObjective::Logistic,
+                _ => gbdt::GbdtObjective::SquaredError,
+            };
+            let ensemble = gbdt::train_gbdt(x, y, &gp, gbdt_objective);
             let r2 = ensemble.r_squared(x, y);
             let mse_val = ensemble.mse(x, y);
-            let json = ensemble.to_xgb_json();
+            let objective = match gbdt_objective {
+                gbdt::GbdtObjective::Logistic => "binary:logistic",
+                gbdt::GbdtObjective::SquaredError => "reg:squarederror",
+            };
+            let json = ensemble.to_xgb_json(objective);
             Ok(TrainingResult {
                 coefficients: vec![],
                 intercept: ensemble.initial_prediction,

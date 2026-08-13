@@ -61,7 +61,10 @@ impl ModelRegistry {
 
     /// Record the ordinal encoding map for a string-target model.
     pub fn insert_label_map(&self, name: &str, labels: Vec<String>) {
-        self.label_maps.write().unwrap().insert(name.to_string(), labels);
+        self.label_maps
+            .write()
+            .unwrap()
+            .insert(name.to_string(), labels);
     }
 
     /// Class labels for a model (None for numeric targets).

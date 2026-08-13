@@ -5,14 +5,14 @@ pub mod batch;
 
 use crate::model::global_registry;
 use duckdb::{
-    Result,
     core::{DataChunkHandle, LogicalTypeHandle, LogicalTypeId},
-    vtab::{BindInfo, InitInfo, TableFunctionInfo, VTab, arrow::record_batch_to_duckdb_data_chunk},
+    vtab::{arrow::record_batch_to_duckdb_data_chunk, BindInfo, InitInfo, TableFunctionInfo, VTab},
+    Result,
 };
 use std::error::Error;
 use std::sync::{
-    Arc as StdArc,
     atomic::{AtomicBool, Ordering},
+    Arc as StdArc,
 };
 
 #[repr(C)]
@@ -34,7 +34,9 @@ impl VTab for PredictFn {
     fn bind(bind: &BindInfo) -> Result<Self::BindData, Box<dyn Error>> {
         let n_params = bind.get_parameter_count();
         if n_params < 2 {
-            return Err("ml_predict requires model_name and features_json (e.g. '[1.0,2.0]')".into());
+            return Err(
+                "ml_predict requires model_name and features_json (e.g. '[1.0,2.0]')".into(),
+            );
         }
 
         let model_name: String = bind.get_parameter(0).to_string();

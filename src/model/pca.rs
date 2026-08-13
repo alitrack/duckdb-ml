@@ -226,7 +226,11 @@ fn rayleigh_quotient(a: &[f64], n: usize, v: &[f64]) -> f64 {
     }
     let numer: f64 = v.iter().zip(av.iter()).map(|(&a, &b)| a * b).sum();
     let denom: f64 = v.iter().map(|&x| x * x).sum();
-    if denom > 1e-14 { numer / denom } else { 0.0 }
+    if denom > 1e-14 {
+        numer / denom
+    } else {
+        0.0
+    }
 }
 
 // ── MlModel wrapper ──

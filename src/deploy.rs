@@ -11,9 +11,9 @@
 
 use crate::model::global_registry;
 use duckdb::{
-    Result,
     core::{DataChunkHandle, LogicalTypeHandle},
-    vtab::{BindInfo, InitInfo, TableFunctionInfo, VTab, arrow::record_batch_to_duckdb_data_chunk},
+    vtab::{arrow::record_batch_to_duckdb_data_chunk, BindInfo, InitInfo, TableFunctionInfo, VTab},
+    Result,
 };
 use std::error::Error;
 use std::sync::atomic::{AtomicBool, Ordering};

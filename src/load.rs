@@ -2,16 +2,16 @@
 //!
 //! Load pre-trained models from files into the global registry for ml_predict.
 
-use crate::model::MlModel;
 use crate::model::global_registry;
+use crate::model::MlModel;
 use duckdb::{
-    Result,
     core::{DataChunkHandle, LogicalTypeHandle, LogicalTypeId},
-    vtab::{BindInfo, InitInfo, TableFunctionInfo, VTab, arrow::record_batch_to_duckdb_data_chunk},
+    vtab::{arrow::record_batch_to_duckdb_data_chunk, BindInfo, InitInfo, TableFunctionInfo, VTab},
+    Result,
 };
 use std::error::Error;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 // ── Shared infrastructure ──
 
