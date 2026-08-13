@@ -43,11 +43,11 @@ SELECT ml_assoc_rules(
     0.6);  -- min_confidence (fraction)
 ```
 
-## Algorithms (25)
+## Algorithms (26)
 
 | Category | Algorithms |
 |----------|-----------|
-| **Linear** | `linear_regression`, `ridge_regression`, `lasso_regression`, `robust` (Huber IRLS, outlier-resistant) |
+| **Linear** | `linear_regression`, `ridge_regression`, `lasso_regression`, `elastic_net`, `robust` (Huber IRLS, outlier-resistant) |
 | **Generalized Linear** | `logistic_regression` (binary), `multilogistic` (softmax multi-class), `ordinal` (cumulative-logit ordered multi-class) |
 | **Survival** | `cox` (proportional hazards, via `ml_cox_train` — time/event/features) |
 | **Time Series** | `arima` (ARIMA(p,d,q) forecasting) |
@@ -87,6 +87,13 @@ SELECT ml_cross_validate('linear_regression',
   the confusion matrix; ROC AUC uses the raw scores with tie handling).
 - `ml_cross_validate`: deterministic sequential folds (fold f = indices with
   `i % k == f`); returns per-fold and mean `mse`/`r2`.
+
+> **Note on descriptive statistics** — duckdb-ml deliberately focuses on ML
+> algorithms only. For descriptive statistics, hypothesis tests (t / χ² / F)
+> and R-style distributions, use the community
+> [stats_duck](https://github.com/duckdb/community-extensions) plugin:
+> `INSTALL stats_duck; LOAD stats_duck;` — it composes cleanly with `ml_*`
+> functions in the same query.
 
 ## DBSCAN Clustering
 
@@ -233,6 +240,23 @@ SELECT ml_predict_batch_value('m', '[[20]]');
 ```
 
 Hyperparameters: `c` (Huber cutoff, default 1.345), `max_iters` (default 50).
+
+## Elastic Net Regression (elastic_net)
+
+Ridge + lasso blend (`α·l1_ratio·‖β‖₁ + α·(1−l1_ratio)·‖β‖₂²`), trained by
+cyclical coordinate descent with soft-thresholding (sklearn's algorithm).
+`l1_ratio=0` reduces to ridge, `l1_ratio=1` to lasso. Coefficients are on the
+raw-feature scale (features are centered internally).
+
+```sql
+SELECT ml_train_model('m', 'elastic_net', '[2,5,8,11,14,17,20,23,26,29]',
+    '[[0],[1],[2],[3],[4],[5],[6],[7],[8],[9]]',
+    '{"alpha": 0.0001, "l1_ratio": 0.5}');
+SELECT ml_predict_batch_value('m', '[[10]]');  -- ~32
+```
+
+Hyperparameters: `alpha` (overall strength, default 1.0), `l1_ratio`
+(L1 mixing, default 0.5), `max_iter` (default 1000).
 
 ## Complete Pipeline Example
 

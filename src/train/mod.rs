@@ -1,6 +1,7 @@
 pub mod arima;
 pub mod cox;
 pub mod dbscan;
+pub mod elastic_net;
 pub mod gbdt;
 pub mod kmeans;
 pub mod lasso;
@@ -208,6 +209,13 @@ pub fn train(
             let max_iters = params.get("max_iters").copied().unwrap_or(50.0) as usize;
             robust::train(x, y, c, max_iters)
                 .map_err(|e| -> Box<dyn Error> { format!("robust: {e}").into() })
+        }
+        Algorithm::ElasticNetRegression => {
+            let alpha = params.get("alpha").copied().unwrap_or(1.0);
+            let l1_ratio = params.get("l1_ratio").copied().unwrap_or(0.5);
+            let max_iter = params.get("max_iter").copied().unwrap_or(1000.0) as usize;
+            elastic_net::train(x, y, alpha, l1_ratio, max_iter)
+                .map_err(|e| -> Box<dyn Error> { format!("elastic_net: {e}").into() })
         }
         Algorithm::Arima => {
             let p = params.get("p").copied().unwrap_or(1.0) as usize;

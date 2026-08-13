@@ -10,7 +10,6 @@
 //!   4: params_json (optional) — JSON object, e.g. '{"lr": 0.01}'
 
 use crate::model::{global_registry, Algorithm};
-use crate::train;
 use duckdb::{
     core::{DataChunkHandle, LogicalTypeHandle, LogicalTypeId},
     vtab::{arrow::record_batch_to_duckdb_data_chunk, BindInfo, InitInfo, TableFunctionInfo, VTab},
@@ -18,7 +17,6 @@ use duckdb::{
 };
 use std::collections::HashMap;
 use std::error::Error;
-use std::fmt::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -244,6 +242,22 @@ pub fn train_and_register(
                 .to_string();
                 Arc::new(m)
             }
+            Algorithm::ElasticNetRegression => {
+                let mut m = LinearModel::new(
+                    result.coefficients,
+                    n_samples,
+                    result.r_squared,
+                    result.mse,
+                    0.0,
+                );
+                m.metadata.algorithm = Algorithm::ElasticNetRegression;
+                m.metadata.hyperparameters_json = serde_json::json!({
+                    "alpha": params.get("alpha").copied().unwrap_or(1.0),
+                    "l1_ratio": params.get("l1_ratio").copied().unwrap_or(0.5)
+                })
+                .to_string();
+                Arc::new(m)
+            }
             Algorithm::LogisticRegression => Arc::new(LogisticModel::new(
                 result.coefficients,
                 n_samples,
@@ -352,6 +366,11 @@ fn register_from_blob(
         Algorithm::RobustRegression => {
             let mut m = LinearModel::deserialize(blob)?;
             m.metadata.algorithm = Algorithm::RobustRegression;
+            Arc::new(m)
+        }
+        Algorithm::ElasticNetRegression => {
+            let mut m = LinearModel::deserialize(blob)?;
+            m.metadata.algorithm = Algorithm::ElasticNetRegression;
             Arc::new(m)
         }
         Algorithm::LogisticRegression => Arc::new(LogisticModel::deserialize(blob)?),

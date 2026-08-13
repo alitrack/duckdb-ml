@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 pub enum Algorithm {
     LinearRegression,
     RidgeRegression,
+    ElasticNetRegression,
     LogisticRegression,
     MultinomialLogisticRegression,
     OrdinalLogisticRegression,
@@ -36,6 +37,7 @@ impl std::fmt::Display for Algorithm {
         match self {
             Algorithm::LinearRegression => write!(f, "linear_regression"),
             Algorithm::RidgeRegression => write!(f, "ridge_regression"),
+            Algorithm::ElasticNetRegression => write!(f, "elastic_net"),
             Algorithm::LogisticRegression => write!(f, "logistic_regression"),
             Algorithm::MultinomialLogisticRegression => write!(f, "multilogistic"),
             Algorithm::OrdinalLogisticRegression => write!(f, "ordinal"),
@@ -67,6 +69,7 @@ impl Algorithm {
         match s {
             "linear_regression" => Some(Algorithm::LinearRegression),
             "ridge_regression" => Some(Algorithm::RidgeRegression),
+            "elastic_net" => Some(Algorithm::ElasticNetRegression),
             "logistic_regression" => Some(Algorithm::LogisticRegression),
             "multilogistic" => Some(Algorithm::MultinomialLogisticRegression),
             "ordinal" => Some(Algorithm::OrdinalLogisticRegression),

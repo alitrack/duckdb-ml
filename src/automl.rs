@@ -209,6 +209,17 @@ impl VTab for CompareFn {
                                     m.metadata.algorithm = Algorithm::RobustRegression;
                                     Some(Arc::new(m) as Arc<dyn MlModel>)
                                 }
+                                Algorithm::ElasticNetRegression => {
+                                    let mut m = LinearModel::new(
+                                        result.coefficients,
+                                        result.num_samples,
+                                        result.r_squared,
+                                        result.mse,
+                                        0.0,
+                                    );
+                                    m.metadata.algorithm = Algorithm::ElasticNetRegression;
+                                    Some(Arc::new(m) as Arc<dyn MlModel>)
+                                }
                                 Algorithm::LogisticRegression => Some(Arc::new(LogisticModel::new(
                                     result.coefficients,
                                     result.num_samples,
