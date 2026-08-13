@@ -88,6 +88,7 @@ pub struct SvrModelData {
 /// `gamma` = kernel width for rbf/poly/sigmoid (default 1/n_features),
 /// `degree`/`coef0` for poly/sigmoid, `tol` = SMO sweep tolerance,
 /// `max_iter` = sweep cap.
+#[allow(clippy::too_many_arguments)]
 pub fn train(
     x: &[Vec<f64>],
     y: &[f64],
