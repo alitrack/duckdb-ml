@@ -254,6 +254,34 @@ report.add("smote synthetic near minority cluster", int(d_min < d_maj),
 report.add("smote retrain bit-identical", int(json.dumps(r1) == json.dumps(r2)),
            1.0, 0.0, json.dumps(r1) == json.dumps(r2), "local fixed-seed PRNG")
 
+# ── 6c. ml_voting: hard majority must equal manual bincount ──
+# Three classifiers voted via ml_voting vs a numpy bincount reference.
+nv = 240
+v_centers = np.array([[0, 0], [4, 0], [0, 4]])
+Xv = np.vstack([v_centers[i % 3] + rng.normal(0, 0.9, 2) for i in range(nv)])
+yv = (np.arange(nv) % 3).astype(float)
+tv = int(0.7 * nv)
+for vname, valgo, vpars in [("v_knn", "knn_classifier", {"k": 5}),
+                            ("v_log", "logistic_regression", {}),
+                            ("v_nb", "naive_bayes", {})]:
+    train(con, vname, valgo, Xv[:tv], yv[:tv], vpars)
+v_members = [np.asarray(predict(con, n, Xv[tv:]), float).round().astype(int)
+             for n in ["v_knn", "v_log", "v_nb"]]
+v_manual = np.array([np.bincount([m[i] for m in v_members], minlength=3).argmax()
+                     for i in range(len(v_members[0]))])
+v_res = []
+for row in Xv[tv:]:
+    v_res.append(round(json.loads(con.execute(
+        "SELECT ml_voting(?, ?, ?)",
+        [json.dumps(["v_knn", "v_log", "v_nb"]), json.dumps(row.tolist()), "hard"],
+    ).fetchone()[0])["result"]))
+report.add("voting hard == manual bincount", float(np.mean(np.array(v_res) == v_manual)),
+           1.0, 0.0, np.mean(np.array(v_res) == v_manual) >= 0.999,
+           f"n={len(v_res)} majority votes")
+v_acc = float(np.mean(np.array(v_res) == yv[tv:]))
+report.add("voting accuracy", v_acc, 0.9, 0.0, v_acc >= 0.9,
+           "3-model majority must classify 3 blobs")
+
 ok = report.print_report()
 con.close()
 raise SystemExit(0 if ok else 1)

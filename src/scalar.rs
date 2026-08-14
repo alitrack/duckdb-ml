@@ -181,6 +181,49 @@ impl VArrowScalar for SmoteFn {
 
 
 
+/// ml_voting(model_names_json, features_json, mode) → VARCHAR
+/// Ensemble vote over registered models: mode 'hard' = majority (rounded
+/// labels), 'mean' = average. Returns JSON {"votes":[...],"result":v}.
+pub struct VotingFn;
+
+impl VArrowScalar for VotingFn {
+    type State = ();
+
+    fn invoke(_state: &Self::State, input: RecordBatch) -> Result<ArrayRef, Box<dyn Error>> {
+        let n = input.num_rows();
+        let names_json = col_str(&input, 0)?;
+        let x_json = col_str(&input, 1)?;
+        let mode_str = col_str(&input, 2)?;
+
+        let names: Vec<String> = serde_json::from_str(names_json)
+            .map_err(|e| format!("Invalid model names JSON: {e}"))?;
+        let x: Vec<f64> = serde_json::from_str(x_json)
+            .map_err(|e| format!("Invalid features JSON: {e}"))?;
+        let mode = crate::train::voting::VotingMode::parse(mode_str)
+            .ok_or_else(|| format!("Invalid voting mode: '{mode_str}' (hard|mean)"))?;
+
+        let votes = crate::train::voting::member_predictions(&names, &x)
+            .map_err(|e| e)?;
+        let result = crate::train::voting::vote(&names, &x, mode).map_err(|e| e)?;
+        let out_json = serde_json::json!({
+            "votes": votes,
+            "result": result,
+            "mode": mode_str,
+        })
+        .to_string();
+
+        let out = StringArray::from(vec![Some(out_json); n]);
+        Ok(Arc::new(out))
+    }
+
+    fn signatures() -> Vec<ArrowFunctionSignature> {
+        vec![ArrowFunctionSignature::exact(
+            vec![DataType::Utf8, DataType::Utf8, DataType::Utf8],
+            DataType::Utf8,
+        )]
+    }
+}
+
 /// ml_km_train(model, time_json, event_json) → VARCHAR
 /// Kaplan-Meier survival curve training (feature-less). predict() returns the
 /// median survival time.

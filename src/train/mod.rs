@@ -19,6 +19,7 @@ pub mod robust;
 pub mod smote;
 pub mod svm;
 pub mod svr;
+pub mod voting;
 pub mod table_fn;
 pub mod tree;
 

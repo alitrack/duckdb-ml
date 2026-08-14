@@ -53,6 +53,7 @@ SELECT ml_assoc_rules(
 | **Generalized Linear** | `logistic_regression` (binary), `multilogistic` (softmax multi-class), `ordinal` (cumulative-logit ordered multi-class) |
 | **Survival** | `cox` (proportional hazards, via `ml_cox_train`), `kaplan_meier` (product-limit curve, via `ml_km_train`; predict = median survival) |
 | **Data Aug** | `ml_smote(x_json, y_json, k, dup_ratio)` — deterministic minority oversampling (JSON out) |
+| **Ensemble** | `ml_voting(models_json, features_json, mode)` — hard majority / mean over registered models |
 | **Time Series** | `arima` (ARIMA(p,d,q) forecasting) |
 | **Tree** | `decision_tree`, `random_forest` |
 | **Gradient Boosting** | `xgboost_regression`, `xgboost_binary` (pure-Rust GBDT); `xgboost_binary` + `num_class>2` → multi-class softmax (multi:softprob, K trees/round) |
