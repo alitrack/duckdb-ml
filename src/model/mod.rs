@@ -12,6 +12,7 @@ pub mod multilogistic;
 pub mod naive_bayes;
 pub mod ordinal;
 pub mod pca;
+pub mod poly;
 pub mod registry;
 pub mod svm;
 pub mod svr;

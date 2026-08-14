@@ -47,7 +47,7 @@ SELECT ml_assoc_rules(
 
 | Category | Algorithms |
 |----------|-----------|
-| **Linear** | `linear_regression`, `ridge_regression`, `lasso_regression`, `elastic_net`, `robust` (Huber IRLS, outlier-resistant) |
+| **Regression** | `linear_regression`, `ridge_regression`, `lasso_regression`, `elastic_net`, `robust` (Huber), `polynomial_regression` (degree ≥ 1, per-feature powers, no interaction terms) |
 | **Kernel** | `svm` (classification), `svr` (ε-SVR regression: linear/rbf/poly/sigmoid kernels, hand-written working-set SMO) |
 | **Trees** | `decision_tree`, `random_forest` (regression), `rf_classifier` (Gini splits, majority vote; string labels auto-encoded) |
 | **Generalized Linear** | `logistic_regression` (binary), `multilogistic` (softmax multi-class), `ordinal` (cumulative-logit ordered multi-class) |

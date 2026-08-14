@@ -117,6 +117,24 @@ report.add("robust R2(ours) on clean test pts", r2_ours_clean, 0.9, 0.0,
 report.add("robust pred corr vs sklearn", sign_corr(p_ours, p_sk), 1.0, 0.05,
            sign_corr(p_ours, p_sk) >= 0.95)
 
+# ── 7. polynomial_regression vs sklearn PolynomialFeatures + LinearRegression ──
+# Per-feature power expansion (no interaction terms — single feature ⇒ exact match).
+from sklearn.preprocessing import PolynomialFeatures
+Xpoly = np.sort(rng.uniform(-2, 2, 300))[:, None]
+ypoly = (1.5 - 0.8 * Xpoly[:, 0] + 2.0 * Xpoly[:, 0] ** 2 - 0.3 * Xpoly[:, 0] ** 3
+         + rng.normal(0, 0.05, 300))
+Xpt, Xpv, ypt, ypv = split(Xpoly, ypoly)
+train(con, "poly3", "polynomial_regression", Xpt, ypt, {"degree": 3})
+p_ours = np.asarray(predict(con, "poly3", Xpv), float)
+pf = PolynomialFeatures(3, include_bias=False)
+p_sk = LinearRegression().fit(pf.fit_transform(Xpt), ypt).predict(pf.transform(Xpv))
+r2_ours = r2(ypv, p_ours)
+r2_sk = r2(ypv, p_sk)
+report.add("polynomial(deg3) R2(ours)", r2_ours, 0.95, 0.0, r2_ours >= 0.95,
+           f"sklearn R2={r2_sk:.6f}")
+report.add("polynomial(deg3) pred corr vs sklearn", sign_corr(p_ours, p_sk), 1.0, 1e-9,
+           sign_corr(p_ours, p_sk) >= 0.999999999, "single-feature ⇒ bitwise match")
+
 ok = report.print_report()
 con.close()
 raise SystemExit(0 if ok else 1)

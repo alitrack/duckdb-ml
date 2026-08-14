@@ -10,6 +10,7 @@ pub mod logistic;
 pub mod mlp;
 pub mod multilogistic;
 pub mod ordinal;
+pub mod poly;
 pub mod robust;
 pub mod svm;
 pub mod svr;
@@ -61,6 +62,11 @@ pub fn train(
         Algorithm::LinearRegression | Algorithm::RidgeRegression => {
             let lambda = params.get("lambda").copied().unwrap_or(0.0);
             linear::train(x, y, lambda)
+        }
+        Algorithm::PolynomialRegression => {
+            let degree = params.get("degree").copied().unwrap_or(2.0) as usize;
+            let lambda = params.get("lambda").copied().unwrap_or(0.0);
+            poly::train(x, y, degree, lambda)
         }
         Algorithm::LogisticRegression => {
             let lr = params.get("lr").copied().unwrap_or(0.01);

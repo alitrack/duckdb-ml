@@ -158,7 +158,7 @@ pub fn train_and_register(
     use crate::train;
 
     let algorithm = Algorithm::parse_algorithm(algorithm_str).ok_or_else(|| {
-        format!("Unknown algorithm: '{algorithm_str}'. Available: linear_regression, ridge_regression, logistic_regression, decision_tree, random_forest, kmeans, knn_regressor, knn_classifier, naive_bayes, pca, lda")
+        format!("Unknown algorithm: '{algorithm_str}'. Available: linear_regression, ridge_regression, logistic_regression, decision_tree, random_forest, kmeans, knn_regressor, knn_classifier, naive_bayes, pca, lda, polynomial_regression")
     })?;
 
     let y: Vec<f64> = match serde_json::from_str::<Vec<f64>>(target_json) {
@@ -216,7 +216,9 @@ pub fn train_and_register(
             global_registry().insert(model_name.to_string(), arc_model);
         }
     } else {
-        use crate::model::{lasso::LassoModel, linear::LinearModel, logistic::LogisticModel};
+        use crate::model::{
+            lasso::LassoModel, linear::LinearModel, logistic::LogisticModel, poly::PolyModel,
+        };
         let lambda = params.get("lambda").copied().unwrap_or(0.0);
         let model: Arc<dyn crate::model::MlModel> = match algorithm {
             Algorithm::LinearRegression | Algorithm::RidgeRegression => Arc::new(LinearModel::new(
@@ -226,6 +228,17 @@ pub fn train_and_register(
                 result.mse,
                 lambda,
             )),
+            Algorithm::PolynomialRegression => {
+                let degree = params.get("degree").copied().unwrap_or(2.0) as usize;
+                Arc::new(PolyModel::new(
+                    result.coefficients,
+                    degree,
+                    n_samples,
+                    result.r_squared,
+                    result.mse,
+                    lambda,
+                ))
+            }
             Algorithm::RobustRegression => {
                 let mut m = LinearModel::new(
                     result.coefficients,
@@ -344,6 +357,7 @@ fn register_from_blob(
         naive_bayes::NbMlModel,
         ordinal::OrdinalMlModel,
         pca::PcaMlModel,
+        poly::PolyModel,
         svm::SvmModel,
         tree::{ForestClassifierModel, ForestModel, TreeModel},
         MlModel,
@@ -409,11 +423,12 @@ fn register_from_blob(
         Algorithm::PCA => Arc::new(PcaMlModel::deserialize(blob)?),
         Algorithm::LDA => Arc::new(LdaMlModel::deserialize(blob)?),
         Algorithm::LassoRegression
+        | Algorithm::PolynomialRegression
         | Algorithm::XGBoostRegressor
         | Algorithm::XGBoostClassifier
         | Algorithm::Onnx => {
             return Err(
-                "XGBoost and ONNX models must be loaded via ml_load_onnx/ml_load_xgboost".into(),
+                "Lasso/polynomial models register via ml_train_model; XGBoost/ONNX must be loaded via ml_load_xgboost/ml_load_onnx".into(),
             );
         }
     };

@@ -33,6 +33,7 @@ pub enum Algorithm {
     SVM,
     SVR,
     LDA,
+    PolynomialRegression,
 }
 
 impl std::fmt::Display for Algorithm {
@@ -66,6 +67,7 @@ impl std::fmt::Display for Algorithm {
             Algorithm::SVM => write!(f, "svm"),
             Algorithm::SVR => write!(f, "svr"),
             Algorithm::LDA => write!(f, "lda"),
+            Algorithm::PolynomialRegression => write!(f, "polynomial_regression"),
         }
     }
 }
@@ -101,6 +103,7 @@ impl Algorithm {
             "svm" => Some(Algorithm::SVM),
             "svr" => Some(Algorithm::SVR),
             "lda" => Some(Algorithm::LDA),
+            "polynomial_regression" => Some(Algorithm::PolynomialRegression),
             _ => None,
         }
     }

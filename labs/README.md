@@ -37,7 +37,7 @@ python labs/run_all.py
 
 | 文件 | 算法 | 参考实现 | 关键容差 |
 |---|---|---|---|
-| verify_01_linear.py | ml_ols / linear / ridge / lasso / elastic_net / robust | sklearn LinearRegression/Ridge/Lasso/ElasticNet/HuberRegressor | 系数 1e-6；预测 R²≥0.9~0.99 |
+| verify_01_linear.py | ml_ols / linear / ridge / lasso / elastic_net / robust / polynomial_regression | sklearn LinearRegression/Ridge/Lasso/ElasticNet/HuberRegressor/PolynomialFeatures | 系数 1e-6；预测 R²≥0.9~0.99；多项式单特征逐位一致 |
 | verify_02_trees.py | decision_tree / random_forest / rf_classifier / xgboost_regression / xgboost_binary | sklearn Tree/Forest/GradientBoosting | R²≥0.95 / acc≥0.97；字符串标签解码 |
 | verify_03_kernel.py | svm (linear/rbf) / svr (linear/rbf) / lda | sklearn SVC/SVR/LDA | acc≥0.95 / R²≥0.95；预测相关≥0.99；lda 判别方向|corr|≥0.99 |
 | verify_04_classify.py | logistic / multilogistic / ordinal / naive_bayes / knn | sklearn Logistic/GNB/KNN | acc≥0.85~0.95；k-NN 与 sklearn 逐位一致 |
