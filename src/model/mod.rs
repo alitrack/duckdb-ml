@@ -1,4 +1,5 @@
 pub mod adaboost;
+pub mod agglomerative;
 pub mod arima;
 pub mod cox;
 pub mod dbscan;

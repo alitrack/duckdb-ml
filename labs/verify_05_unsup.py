@@ -65,6 +65,18 @@ p_fcm2 = np.asarray(predict(con, "fcm01", Xk), float)
 report.add("fuzzy_cmeans retrain bit-identical", int(np.array_equal(p_fcm, p_fcm2)),
            1.0, 0.0, np.array_equal(p_fcm, p_fcm2), "local xorshift state ⇒ reproducible")
 
+# ── 1c. agglomerative (hierarchical) vs sklearn AgglomerativeClustering ──
+# All three linkages on well-separated blobs must align perfectly.
+from sklearn.cluster import AgglomerativeClustering
+for link_name, link_code in [("single", 0.0), ("complete", 1.0), ("average", 2.0)]:
+    train(con, f"agg_{link_name}", "agglomerative", Xk, yk_dummy,
+          {"k": 4, "linkage": link_code})
+    p_agg = np.asarray(predict(con, f"agg_{link_name}", Xk), float)
+    p_agg_sk = AgglomerativeClustering(n_clusters=4, linkage=link_name).fit_predict(Xk)
+    al_agg = cluster_alignment(p_agg, p_agg_sk, 4)
+    report.add(f"agglomerative({link_name}) alignment vs sklearn", al_agg, 0.9, 0.0,
+               al_agg >= 0.9, f"hierarchical merge must match sklearn")
+
 # ── 2. dbscan vs sklearn DBSCAN ──
 # NOTE: duckdb-ml predict() assigns EVERY point to its nearest cluster mean
 # (MADlib-style simplification) — it has no "noise" concept. sklearn keeps

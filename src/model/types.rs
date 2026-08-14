@@ -37,6 +37,7 @@ pub enum Algorithm {
     FuzzyCMeans,
     AdaBoost,
     KaplanMeier,
+    Agglomerative,
 }
 
 impl std::fmt::Display for Algorithm {
@@ -74,6 +75,7 @@ impl std::fmt::Display for Algorithm {
             Algorithm::FuzzyCMeans => write!(f, "fuzzy_cmeans"),
             Algorithm::AdaBoost => write!(f, "adaboost"),
             Algorithm::KaplanMeier => write!(f, "kaplan_meier"),
+            Algorithm::Agglomerative => write!(f, "agglomerative"),
         }
     }
 }
@@ -113,6 +115,7 @@ impl Algorithm {
             "fuzzy_cmeans" => Some(Algorithm::FuzzyCMeans),
             "adaboost" => Some(Algorithm::AdaBoost),
             "kaplan_meier" => Some(Algorithm::KaplanMeier),
+            "agglomerative" => Some(Algorithm::Agglomerative),
             _ => None,
         }
     }

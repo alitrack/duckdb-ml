@@ -1,4 +1,5 @@
 pub mod adaboost;
+pub mod agglomerative;
 pub mod arima;
 pub mod cox;
 pub mod dbscan;
@@ -360,6 +361,32 @@ pub fn train(
                 mse: None,
                 num_samples: x.len(),
                 model_blob: None,
+            })
+        }
+        Algorithm::Agglomerative => {
+            let k = params.get("k").copied().unwrap_or(3.0) as usize;
+            let linkage_code = params.get("linkage").copied().unwrap_or(1.0) as usize;
+            let lnk = match linkage_code {
+                0 => agglomerative::Linkage::Single,
+                1 => agglomerative::Linkage::Complete,
+                _ => agglomerative::Linkage::Average,
+            };
+            let result = agglomerative::train(x, k, lnk);
+            let m = crate::model::agglomerative::AgglomerativeModel::new(
+                &result,
+                x[0].len(),
+                x.len(),
+                lnk,
+            );
+            let blob = crate::model::MlModel::serialize(&m)
+                .map_err(|e| -> Box<dyn Error> { format!("agglomerative serialize: {e}").into() })?;
+            Ok(TrainingResult {
+                coefficients: vec![],
+                intercept: 0.0,
+                r_squared: None,
+                mse: None,
+                num_samples: x.len(),
+                model_blob: Some(blob),
             })
         }
         Algorithm::AdaBoost => {

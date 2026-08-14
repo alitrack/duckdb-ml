@@ -393,7 +393,8 @@ fn register_from_blob(
     blob: &[u8],
 ) -> Result<Arc<dyn crate::model::MlModel>, Box<dyn Error>> {
     use crate::model::{
-        adaboost::AdaBoostModel, arima::ArimaMlModel, cox::CoxMlModel,
+        adaboost::AdaBoostModel, agglomerative::AgglomerativeModel,
+        arima::ArimaMlModel, cox::CoxMlModel,
         dbscan::DbscanModel, km::KmMlModel,
         kmeans::KMeansModel,
         knn::KnnMlModel,
@@ -471,6 +472,7 @@ fn register_from_blob(
         Algorithm::LDA => Arc::new(LdaMlModel::deserialize(blob)?),
         Algorithm::AdaBoost => Arc::new(AdaBoostModel::deserialize(blob)?),
         Algorithm::KaplanMeier => Arc::new(KmMlModel::deserialize(blob)?),
+        Algorithm::Agglomerative => Arc::new(AgglomerativeModel::deserialize(blob)?),
         Algorithm::LassoRegression
         | Algorithm::PolynomialRegression
         | Algorithm::FuzzyCMeans
