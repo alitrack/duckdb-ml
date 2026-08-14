@@ -117,6 +117,27 @@ report.add("xgboost_bin accuracy(ours)", acc_ours, 0.97, 0.0, acc_ours >= 0.97,
 report.add("xgboost_bin acc diff vs sklearn", abs(acc_ours - acc_sk), 0.0, 0.03,
            abs(acc_ours - acc_sk) <= 0.03)
 
+# ── 6b. gbdt softmax (xgboost_binary + num_class=3) vs sklearn GBC ──
+# Three separated blobs; multi:softprob path (K trees/round, Newton leaves).
+nsm = 300
+sm_centers = np.array([[-3, -3], [3, -3], [0, 3]])
+Xsm = np.vstack([sm_centers[i % 3] + rng.normal(0, 0.8, 2) for i in range(nsm)])
+ysm = np.array([float(i % 3) for i in range(nsm)])
+tsm = int(0.7 * nsm)
+train(con, "gbdtsmx", "xgboost_binary", Xsm[:tsm], ysm[:tsm],
+      {"num_class": 3, "n_estimators": 40, "learning_rate": 0.1, "max_depth": 3})
+p_smx = np.asarray(predict(con, "gbdtsmx", Xsm[tsm:]), float).round().astype(int)
+p_smx_sk = GradientBoostingClassifier(
+    n_estimators=40, learning_rate=0.1, max_depth=3, random_state=SEED,
+).fit(Xsm[:tsm], ysm[:tsm]).predict(Xsm[tsm:])
+acc_smx = accuracy(ysm[tsm:], p_smx)
+acc_smx_sk = accuracy(ysm[tsm:], p_smx_sk)
+report.add("gbdt_softmax accuracy(ours)", acc_smx, 0.95, 0.0, acc_smx >= 0.95,
+           f"sklearn GBC acc={acc_smx_sk:.4f}")
+report.add("gbdt_softmax label agreement vs sklearn", float(np.mean(p_smx == p_smx_sk)),
+           0.9, 0.0, np.mean(p_smx == p_smx_sk) >= 0.9,
+           "multi:softprob trees must vote like sklearn per-class trees")
+
 ok = report.print_report()
 con.close()
 raise SystemExit(0 if ok else 1)

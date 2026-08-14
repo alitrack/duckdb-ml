@@ -26,6 +26,10 @@ pub struct XgbModel {
     num_features: usize,
     trees: Vec<XgbTree>,
     objective: String,
+    /// Class index per tree (multi:softprob); all 0 otherwise.
+    tree_info: Vec<usize>,
+    /// Number of classes (multi:softprob); 0 otherwise.
+    num_class: usize,
 }
 
 impl XgbTree {
@@ -85,6 +89,26 @@ impl XgbModel {
             .as_array()
             .ok_or("trees is not an array")?;
 
+        // tree_info: class index per tree (multi:softprob); default all 0
+        let tree_info: Vec<usize> = model_block
+            .get("tree_info")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .map(|x| x.as_i64().unwrap_or(0).max(0) as usize)
+                    .collect()
+            })
+            .unwrap_or_else(|| vec![0usize; tree_list.len()]);
+        if tree_info.len() != tree_list.len() {
+            return Err("tree_info length mismatch".into());
+        }
+
+        let num_class = param
+            .get("num_class")
+            .and_then(|v| v.as_str())
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(0);
+
         let mut trees = Vec::with_capacity(tree_list.len());
 
         for tree_json in tree_list {
@@ -123,6 +147,8 @@ impl XgbModel {
             num_features,
             trees,
             objective,
+            tree_info,
+            num_class,
         })
     }
 
@@ -142,13 +168,38 @@ impl XgbModel {
 
     /// Predict with objective transform (regression: identity, binary:logistic: sigmoid)
     pub fn predict(&self, features: &[f64]) -> Result<f64, String> {
-        let raw = self.predict_raw(features)?;
+        if features.len() != self.num_features {
+            return Err(format!(
+                "feature count mismatch: expected {}, got {}",
+                self.num_features,
+                features.len()
+            ));
+        }
         match self.objective.as_str() {
+            "multi:softprob" => {
+                let nk = self.num_class.max(2);
+                let mut scores = vec![self.base_score; nk];
+                for (t, &cls) in self.trees.iter().zip(self.tree_info.iter()) {
+                    scores[cls] += t.predict(features);
+                }
+                let mut best = 0usize;
+                let mut best_v = f64::NEG_INFINITY;
+                for (k, &s) in scores.iter().enumerate() {
+                    if s > best_v {
+                        best_v = s;
+                        best = k;
+                    }
+                }
+                Ok(best as f64)
+            }
             "reg:squarederror"
             | "reg:squaredlogerror"
             | "reg:absoluteerror"
-            | "reg:pseudohubererror" => Ok(raw),
-            "binary:logistic" | "reg:logistic" => Ok(1.0 / (1.0 + (-raw).exp())),
+            | "reg:pseudohubererror" => Ok(self.predict_raw(features)?),
+            "binary:logistic" | "reg:logistic" => {
+                let raw = self.predict_raw(features)?;
+                Ok(1.0 / (1.0 + (-raw).exp()))
+            }
             other => Err(format!("unsupported objective: {other}")),
         }
     }

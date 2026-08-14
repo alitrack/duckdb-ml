@@ -89,17 +89,26 @@ pub fn train(
                 subsample,
                 ..Default::default()
             };
-            let gbdt_objective = match algorithm {
-                Algorithm::XGBoostBinary => gbdt::GbdtObjective::Logistic,
-                _ => gbdt::GbdtObjective::SquaredError,
+            // multi-class: xgboost_binary + num_class > 2 → multi:softprob
+            let num_class = params.get("num_class").copied().unwrap_or(0.0) as usize;
+            let (ensemble, objective) = if algorithm == Algorithm::XGBoostBinary && num_class > 2 {
+                let e = gbdt::train_gbdt_softmax(x, y, &gp, num_class);
+                (e, "multi:softprob")
+            } else {
+                let gbdt_objective = match algorithm {
+                    Algorithm::XGBoostBinary => gbdt::GbdtObjective::Logistic,
+                    _ => gbdt::GbdtObjective::SquaredError,
+                };
+                let e = gbdt::train_gbdt(x, y, &gp, gbdt_objective);
+                let obj = match gbdt_objective {
+                    gbdt::GbdtObjective::Logistic => "binary:logistic",
+                    gbdt::GbdtObjective::SquaredError => "reg:squarederror",
+                    gbdt::GbdtObjective::Softmax { .. } => unreachable!(),
+                };
+                (e, obj)
             };
-            let ensemble = gbdt::train_gbdt(x, y, &gp, gbdt_objective);
             let r2 = ensemble.r_squared(x, y);
             let mse_val = ensemble.mse(x, y);
-            let objective = match gbdt_objective {
-                gbdt::GbdtObjective::Logistic => "binary:logistic",
-                gbdt::GbdtObjective::SquaredError => "reg:squarederror",
-            };
             let json = ensemble.to_xgb_json(objective);
             Ok(TrainingResult {
                 coefficients: vec![],

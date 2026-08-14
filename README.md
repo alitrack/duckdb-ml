@@ -55,7 +55,7 @@ SELECT ml_assoc_rules(
 | **Data Aug** | `ml_smote(x_json, y_json, k, dup_ratio)` — deterministic minority oversampling (JSON out) |
 | **Time Series** | `arima` (ARIMA(p,d,q) forecasting) |
 | **Tree** | `decision_tree`, `random_forest` |
-| **Gradient Boosting** | `xgboost_regression`, `xgboost_binary` (pure-Rust GBDT) |
+| **Gradient Boosting** | `xgboost_regression`, `xgboost_binary` (pure-Rust GBDT); `xgboost_binary` + `num_class>2` → multi-class softmax (multi:softprob, K trees/round) |
 | **Neural** | `mlp_regressor` (1-layer, ReLU, SGD+momentum) |
 | **Distance** | `knn_regressor`, `knn_classifier` |
 | **Bayesian** | `naive_bayes` |

@@ -12,6 +12,8 @@ pub(crate) struct GbTree {
     pub tree: TreeNode,
     #[allow(dead_code)]
     pub base_score: f64,
+    /// Class index this tree belongs to (multi:softprob; 0 otherwise).
+    pub class_idx: usize,
 }
 
 /// GBDT training parameters
@@ -50,10 +52,12 @@ pub struct GbdtEnsemble {
 /// GBDT training objective
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GbdtObjective {
-    /// Squared error — regression on raw targets
+    /// Squared error (reg:squarederror)
     SquaredError,
     /// Logistic (binary:logistic) — trees fit Newton steps of log-loss
     Logistic,
+    /// Multi-class softmax (multi:softprob) — K trees per round, one per class
+    Softmax { num_class: usize },
 }
 
 /// Sigmoid link, overflow-safe
@@ -125,6 +129,7 @@ pub fn train_gbdt(
     let initial_prediction = match objective {
         GbdtObjective::SquaredError => y.iter().sum::<f64>() / n_samples as f64,
         GbdtObjective::Logistic => 0.0,
+        GbdtObjective::Softmax { .. } => 0.0,
     };
 
     // Current predictions — start with mean
@@ -152,6 +157,10 @@ pub fn train_gbdt(
                     h.push((p * (1.0 - p)).max(1e-12));
                 }
                 hessian = Some(h);
+            }
+            GbdtObjective::Softmax { .. } => {
+                // handled by the dedicated train_gbdt_softmax path
+                unreachable!("Softmax must use train_gbdt_softmax")
             }
         }
 
@@ -197,6 +206,7 @@ pub fn train_gbdt(
         trees.push(GbTree {
             tree,
             base_score: 0.0,
+            class_idx: 0,
         });
     }
 
@@ -210,6 +220,93 @@ pub fn train_gbdt(
     }
 }
 
+/// Multi-class softmax GBDT (xgboost `multi:softprob`).
+///
+/// Each round builds K trees (one per class) on the per-class softmax
+/// gradient g_ik = p_ik − y_ik with Newton leaves Σg/Σ(p(1−p)); raw scores
+/// per class accumulate independently, prediction = argmax softmax(raw).
+pub fn train_gbdt_softmax(
+    x: &[Vec<f64>],
+    y: &[f64],
+    params: &GbdtParams,
+    num_class: usize,
+) -> GbdtEnsemble {
+    let n_samples = x.len();
+    let n_features = x[0].len();
+    assert!(num_class >= 2, "softmax needs >= 2 classes");
+
+    // map labels to class indices 0..K
+    let mut labels: Vec<f64> = y.to_vec();
+    labels.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    labels.dedup();
+    assert_eq!(labels.len(), num_class, "label count != num_class");
+    let y_idx: Vec<usize> = y
+        .iter()
+        .map(|&v| labels.iter().position(|&c| c == v).unwrap())
+        .collect();
+
+    let mut raw = vec![vec![0.0f64; num_class]; n_samples];
+    let mut trees = Vec::with_capacity(params.n_estimators * num_class);
+
+    for _iter in 0..params.n_estimators {
+        // softmax probabilities from current raw scores
+        let mut p = vec![vec![0.0f64; num_class]; n_samples];
+        for i in 0..n_samples {
+            let m = raw[i]
+                .iter()
+                .cloned()
+                .fold(f64::NEG_INFINITY, f64::max);
+            let mut z = 0.0f64;
+            for k in 0..num_class {
+                p[i][k] = (raw[i][k] - m).exp();
+                z += p[i][k];
+            }
+            for k in 0..num_class {
+                p[i][k] /= z;
+            }
+        }
+
+        for k in 0..num_class {
+            // gradient g_i = p_ik − y_ik; hessian h_i = p_ik(1 − p_ik)
+            let mut g = Vec::with_capacity(n_samples);
+            let mut h = Vec::with_capacity(n_samples);
+            for i in 0..n_samples {
+                let yik = if y_idx[i] == k { 1.0 } else { 0.0 };
+                g.push(p[i][k] - yik);
+                h.push((p[i][k] * (1.0 - p[i][k])).max(1e-12));
+            }
+
+            let tp = TreeParams {
+                max_depth: params.max_depth,
+                min_samples_split: params.min_samples_split,
+                min_samples_leaf: 1,
+                max_features: None,
+            };
+            let mut tree = build_tree(x, &g, &tp);
+            let all: Vec<usize> = (0..n_samples).collect();
+            apply_newton_leaves(&mut tree, x, &g, &h, &all);
+
+            for i in 0..n_samples {
+                raw[i][k] += params.learning_rate * predict_tree(&tree, &x[i]);
+            }
+            trees.push(GbTree {
+                tree,
+                base_score: 0.0,
+                class_idx: k,
+            });
+        }
+    }
+
+    GbdtEnsemble {
+        trees,
+        initial_prediction: 0.0,
+        n_features,
+        n_samples,
+        params: params.clone(),
+        objective: GbdtObjective::Softmax { num_class },
+    }
+}
+
 impl GbdtEnsemble {
     /// Link the raw ensemble score: identity for squared error, sigmoid
     /// for logistic (probability scale).
@@ -217,21 +314,61 @@ impl GbdtEnsemble {
         match self.objective {
             GbdtObjective::SquaredError => raw,
             GbdtObjective::Logistic => sigmoid(raw),
+            GbdtObjective::Softmax { .. } => raw,
         }
     }
 
-    /// Predict for a single sample (raw score)
+    /// Predict for a single sample. Softmax: returns the predicted class
+    /// index; otherwise the raw score.
     pub fn predict(&self, features: &[f64]) -> f64 {
-        let mut pred = self.initial_prediction;
-        for gbt in &self.trees {
-            pred += self.params.learning_rate * predict_tree(&gbt.tree, features);
+        match self.objective {
+            GbdtObjective::Softmax { num_class } => {
+                let mut scores = vec![self.initial_prediction; num_class];
+                for gbt in &self.trees {
+                    scores[gbt.class_idx] +=
+                        self.params.learning_rate * predict_tree(&gbt.tree, features);
+                }
+                let mut best = 0usize;
+                let mut best_v = f64::NEG_INFINITY;
+                for (k, &s) in scores.iter().enumerate() {
+                    if s > best_v {
+                        best_v = s;
+                        best = k;
+                    }
+                }
+                best as f64
+            }
+            _ => {
+                let mut pred = self.initial_prediction;
+                for gbt in &self.trees {
+                    pred += self.params.learning_rate * predict_tree(&gbt.tree, features);
+                }
+                pred
+            }
         }
-        pred
     }
 
-    /// Predict probability (logistic only; identity for regression)
+    /// Predict probability (logistic only; identity for regression; argmax
+    /// probability for softmax).
     pub fn predict_prob(&self, features: &[f64]) -> f64 {
-        self.link(self.predict(features))
+        match self.objective {
+            GbdtObjective::Softmax { num_class } => {
+                let mut scores = vec![self.initial_prediction; num_class];
+                for gbt in &self.trees {
+                    scores[gbt.class_idx] +=
+                        self.params.learning_rate * predict_tree(&gbt.tree, features);
+                }
+                let m = scores.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+                let mut z = 0.0f64;
+                let mut exps = vec![0.0f64; num_class];
+                for k in 0..num_class {
+                    exps[k] = (scores[k] - m).exp();
+                    z += exps[k];
+                }
+                exps.iter().cloned().fold(0.0f64, f64::max) / z
+            }
+            _ => self.link(self.predict(features)),
+        }
     }
 
     /// Compute R-squared
@@ -287,16 +424,30 @@ impl GbdtEnsemble {
             .map(|(idx, gbt)| serialize_tree_json(&gbt.tree, idx, self.params.learning_rate))
             .collect();
 
-        let tree_info: Vec<String> = (0..self.trees.len()).map(|_| "0".to_string()).collect();
+        // multi:softprob: tree_info = class index per tree; else all "0"
+        let (tree_info, num_class) = match self.objective {
+            GbdtObjective::Softmax { num_class } => (
+                self.trees
+                    .iter()
+                    .map(|t| t.class_idx.to_string())
+                    .collect::<Vec<_>>(),
+                num_class.to_string(),
+            ),
+            _ => (
+                (0..self.trees.len()).map(|_| "0".to_string()).collect(),
+                "0".to_string(),
+            ),
+        };
 
         format!(
-            r#"{{"version":[2,0,0],"learner":{{"gradient_booster":{{"name":"gbtree","model":{{"gbtree_model_param":{{"num_trees":"{trees_len}","num_features":"{n_feat}"}},"trees":[{trees}],"tree_info":[{tinfo}]}}}},"learner_model_param":{{"base_score":"{base}","num_class":"0","num_feature":"{n_feat}"}},"objective":{{"name":"{objective}","reg_loss_param":{{"scale_pos_weight":"1"}}}},"attributes":{{"scikit_learn":{{"n_estimators":{n_est},"max_depth":{md},"learning_rate":{lr}}}}}}}}}"#,
+            r#"{{"version":[2,0,0],"learner":{{"gradient_booster":{{"name":"gbtree","model":{{"gbtree_model_param":{{"num_trees":"{trees_len}","num_features":"{n_feat}"}},"trees":[{trees}],"tree_info":[{tinfo}]}}}},"learner_model_param":{{"base_score":"{base}","num_class":"{ncls}","num_feature":"{n_feat}"}},"objective":{{"name":"{objective}","reg_loss_param":{{"scale_pos_weight":"1"}}}},"attributes":{{"scikit_learn":{{"n_estimators":{n_est},"max_depth":{md},"learning_rate":{lr}}}}}}}}}"#,
             trees_len = self.trees.len(),
             n_feat = self.n_features,
             tinfo = tree_info.join(","),
             trees = trees_json.join(","),
             base = format!("{:.12E}", self.initial_prediction),
             objective = objective,
+            ncls = num_class,
             n_est = self.params.n_estimators,
             md = self.params.max_depth,
             lr = self.params.learning_rate,
@@ -612,5 +763,56 @@ mod tests {
         }
         let acc = correct as f64 / x.len() as f64;
         assert!(acc > 0.95, "logistic GBDT accuracy too low: {acc}");
+    }
+
+    #[test]
+    fn test_gbdt_softmax_three_classes() {
+        // three well-separated blobs → softmax GBDT must classify, and the
+        // JSON roundtrip (multi:softprob) must reproduce the accuracy
+        let mut r = |seed: u64| {
+            let mut s = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            move || {
+                s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                ((s >> 33) as f64 / (1u64 << 31) as f64) - 1.0
+            }
+        };
+        let mut rng = r(7);
+        let mut x = Vec::new();
+        let mut y = Vec::new();
+        let centers = [[-3.0, -3.0], [3.0, -3.0], [0.0, 3.0]];
+        for i in 0..300 {
+            let c = centers[i % 3];
+            x.push(vec![c[0] + rng() * 0.8, c[1] + rng() * 0.8]);
+            y.push((i % 3) as f64);
+        }
+        let params = GbdtParams {
+            n_estimators: 40,
+            learning_rate: 0.1,
+            max_depth: 3,
+            ..Default::default()
+        };
+        let ensemble = train_gbdt_softmax(&x, &y, &params, 3);
+        // direct ensemble predict
+        let mut correct = 0usize;
+        for (xi, &yi) in x.iter().zip(y.iter()) {
+            if (ensemble.predict(xi) - yi).abs() < 1e-12 {
+                correct += 1;
+            }
+        }
+        let acc = correct as f64 / x.len() as f64;
+        assert!(acc > 0.97, "softmax GBDT accuracy too low: {acc}");
+
+        // JSON roundtrip through XgbModel (multi:softprob)
+        let json = ensemble.to_xgb_json("multi:softprob");
+        let model = crate::model::xgboost::XgbModel::from_json(json.as_bytes())
+            .expect("softprob JSON must parse");
+        let mut correct2 = 0usize;
+        for (xi, &yi) in x.iter().zip(y.iter()) {
+            if (model.predict(xi).expect("predict") - yi).abs() < 1e-12 {
+                correct2 += 1;
+            }
+        }
+        let acc2 = correct2 as f64 / x.len() as f64;
+        assert_eq!(acc, acc2, "JSON roundtrip must preserve predictions");
     }
 }
