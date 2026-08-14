@@ -32,6 +32,7 @@ pub enum Algorithm {
     DBSCAN,
     SVM,
     SVR,
+    LDA,
 }
 
 impl std::fmt::Display for Algorithm {
@@ -64,6 +65,7 @@ impl std::fmt::Display for Algorithm {
             Algorithm::DBSCAN => write!(f, "dbscan"),
             Algorithm::SVM => write!(f, "svm"),
             Algorithm::SVR => write!(f, "svr"),
+            Algorithm::LDA => write!(f, "lda"),
         }
     }
 }
@@ -98,6 +100,7 @@ impl Algorithm {
             "dbscan" => Some(Algorithm::DBSCAN),
             "svm" => Some(Algorithm::SVM),
             "svr" => Some(Algorithm::SVR),
+            "lda" => Some(Algorithm::LDA),
             _ => None,
         }
     }

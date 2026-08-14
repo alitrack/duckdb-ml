@@ -158,7 +158,7 @@ pub fn train_and_register(
     use crate::train;
 
     let algorithm = Algorithm::parse_algorithm(algorithm_str).ok_or_else(|| {
-        format!("Unknown algorithm: '{algorithm_str}'. Available: linear_regression, ridge_regression, logistic_regression, decision_tree, random_forest, kmeans, knn_regressor, knn_classifier, naive_bayes, pca")
+        format!("Unknown algorithm: '{algorithm_str}'. Available: linear_regression, ridge_regression, logistic_regression, decision_tree, random_forest, kmeans, knn_regressor, knn_classifier, naive_bayes, pca, lda")
     })?;
 
     let y: Vec<f64> = match serde_json::from_str::<Vec<f64>>(target_json) {
@@ -337,6 +337,7 @@ fn register_from_blob(
         dbscan::DbscanModel,
         kmeans::KMeansModel,
         knn::KnnMlModel,
+        lda::LdaMlModel,
         linear::LinearModel,
         logistic::LogisticModel,
         multilogistic::MultilogisticModel,
@@ -406,6 +407,7 @@ fn register_from_blob(
         }
         Algorithm::NaiveBayes => Arc::new(NbMlModel::deserialize(blob)?),
         Algorithm::PCA => Arc::new(PcaMlModel::deserialize(blob)?),
+        Algorithm::LDA => Arc::new(LdaMlModel::deserialize(blob)?),
         Algorithm::LassoRegression
         | Algorithm::XGBoostRegressor
         | Algorithm::XGBoostClassifier

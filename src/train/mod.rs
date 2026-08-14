@@ -416,5 +416,19 @@ pub fn train(
                 model_blob: Some(blob),
             })
         }
+        Algorithm::LDA => {
+            let k = params.get("k").copied().unwrap_or(2.0) as usize;
+            let model = crate::model::lda::LdaModel::fit(x, y, k)
+                .ok_or("lda: need >= 2 classes and a non-singular within-class scatter (try more samples per class)")?;
+            let blob = model.to_bytes();
+            Ok(TrainingResult {
+                coefficients: vec![],
+                intercept: 0.0,
+                r_squared: None,
+                mse: None,
+                num_samples: x.len(),
+                model_blob: Some(blob),
+            })
+        }
     }
 }

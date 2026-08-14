@@ -104,6 +104,33 @@ report.add("svr-rbf x^2 R2(ours)", r2b_ours, 0.9, 0.0, r2b_ours >= 0.9,
 report.add("svr-rbf x^2 pred corr vs sklearn", sign_corr(p2_ours, p2_sk), 1.0, 0.01,
            sign_corr(p2_ours, p2_sk) >= 0.99)
 
+# ── 5. lda: supervised dim-reduction vs sklearn LinearDiscriminantAnalysis ──
+# Generalized eigenproblem S_b v = λ S_w v solved via ridge-Cholesky +
+# symmetrized M = L⁻¹S_bL⁻ᵀ + deflated power iteration (v = L⁻ᵀu back-transform).
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+LDA_CENTERS = np.array([[0.0, 0.0], [4.0, 0.0], [2.0, 4.0]])
+# interleaved by class so the sequential split keeps all 3 classes in both halves
+Xl, yl = [], []
+for _ in range(100):
+    for lc, lcen in enumerate(LDA_CENTERS):
+        Xl.append(rng.normal(lcen, 0.8))
+        yl.append(float(lc))
+Xl = np.array(Xl)
+yl = np.array(yl)
+Xlt, Xl2, ylt, yl2 = split(Xl, yl)
+train(con, "lda_c", "lda", Xlt, ylt, {"k": 2})
+pl_ours = np.asarray(predict(con, "lda_c", Xl2), float)
+pl_sk = LinearDiscriminantAnalysis(n_components=2).fit(Xlt, ylt).transform(Xl2)[:, 0]
+# direction sign is arbitrary → |corr|; sklearn scales are whitened → corr only
+lcorr = abs(sign_corr(pl_ours, pl_sk))
+report.add("lda first-discriminant corr vs sklearn", lcorr, 1.0, 0.001,
+           lcorr >= 0.99, "sign-agnostic |corr| on held-out transform")
+# class separation sanity: discriminant must separate at least one class pair
+lmean = [pl_ours[yl2 == c].mean() for c in range(3)]
+sep_ok = max(lmean) - min(lmean) > 1.0
+report.add("lda class-separation (span>1)", max(lmean) - min(lmean), 2.0, 0.0,
+           sep_ok, f"class means {[round(v, 3) for v in lmean]}")
+
 ok = report.print_report()
 con.close()
 raise SystemExit(0 if ok else 1)

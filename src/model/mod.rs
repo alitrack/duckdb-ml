@@ -4,6 +4,7 @@ pub mod dbscan;
 pub mod kmeans;
 pub mod knn;
 pub mod lasso;
+pub mod lda;
 pub mod linear;
 pub mod logistic;
 pub mod mlp;
