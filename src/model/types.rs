@@ -38,6 +38,7 @@ pub enum Algorithm {
     AdaBoost,
     KaplanMeier,
     Agglomerative,
+    TSNE,
 }
 
 impl std::fmt::Display for Algorithm {
@@ -76,6 +77,7 @@ impl std::fmt::Display for Algorithm {
             Algorithm::AdaBoost => write!(f, "adaboost"),
             Algorithm::KaplanMeier => write!(f, "kaplan_meier"),
             Algorithm::Agglomerative => write!(f, "agglomerative"),
+            Algorithm::TSNE => write!(f, "tsne"),
         }
     }
 }
@@ -116,6 +118,7 @@ impl Algorithm {
             "adaboost" => Some(Algorithm::AdaBoost),
             "kaplan_meier" => Some(Algorithm::KaplanMeier),
             "agglomerative" => Some(Algorithm::Agglomerative),
+            "tsne" => Some(Algorithm::TSNE),
             _ => None,
         }
     }

@@ -2,6 +2,7 @@ pub mod adaboost;
 pub mod agglomerative;
 pub mod arima;
 pub mod cox;
+pub mod tsne;
 pub mod dbscan;
 pub mod elastic_net;
 pub mod fcm;
@@ -381,6 +382,23 @@ pub fn train(
             );
             let blob = crate::model::MlModel::serialize(&m)
                 .map_err(|e| -> Box<dyn Error> { format!("agglomerative serialize: {e}").into() })?;
+            Ok(TrainingResult {
+                coefficients: vec![],
+                intercept: 0.0,
+                r_squared: None,
+                mse: None,
+                num_samples: x.len(),
+                model_blob: Some(blob),
+            })
+        }
+        Algorithm::TSNE => {
+            let perplexity = params.get("perplexity").copied().unwrap_or(30.0);
+            let max_iter = params.get("max_iters").copied().unwrap_or(300.0) as usize;
+            let lr = params.get("learning_rate").copied().unwrap_or(200.0);
+            let result = tsne::train(x, perplexity, max_iter, lr, 0.8);
+            let m = crate::model::tsne::TsneModel::new(&result, x[0].len(), x.len());
+            let blob = crate::model::MlModel::serialize(&m)
+                .map_err(|e| -> Box<dyn Error> { format!("tsne serialize: {e}").into() })?;
             Ok(TrainingResult {
                 coefficients: vec![],
                 intercept: 0.0,

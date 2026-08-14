@@ -77,6 +77,31 @@ for link_name, link_code in [("single", 0.0), ("complete", 1.0), ("average", 2.0
     report.add(f"agglomerative({link_name}) alignment vs sklearn", al_agg, 0.9, 0.0,
                al_agg >= 0.9, f"hierarchical merge must match sklearn")
 
+# ── 1d. tsne: deterministic nonlinear embedding, clusters stay apart ──
+# Random init ⇒ no bitwise sklearn comparison; assert (a) embedding x of
+# same-blob points is closer than across blobs, (b) retrain is bit-identical.
+train(con, "tsn01", "tsne", Xk, yk_dummy,
+      {"perplexity": 30.0, "max_iters": 1000.0})
+p_ts = np.asarray(predict(con, "tsn01", Xk), float)
+blob_size = len(Xk) // 4
+tlab = np.arange(len(Xk)) // blob_size  # 100 consecutive rows per blob
+tw = tb = twc = tbc = 0.0
+for i in range(len(Xk)):
+    for j in range(i + 1, len(Xk)):
+        d = (p_ts[i] - p_ts[j]) ** 2
+        if tlab[i] == tlab[j]:
+            tw += d; twc += 1
+        else:
+            tb += d; tbc += 1
+ts_ratio = (tw / twc) / (tb / tbc)
+report.add("tsne within/between ratio < 0.5", ts_ratio, 0.5, 0.0,
+           ts_ratio < 0.5, f"embedding keeps blobs apart (ratio={ts_ratio:.3f})")
+train(con, "tsn01", "tsne", Xk, yk_dummy,
+      {"perplexity": 30.0, "max_iters": 1000.0})
+p_ts2 = np.asarray(predict(con, "tsn01", Xk), float)
+report.add("tsne retrain bit-identical", int(np.array_equal(p_ts, p_ts2)),
+           1.0, 0.0, np.array_equal(p_ts, p_ts2), "local fixed-seed PRNG")
+
 # ── 2. dbscan vs sklearn DBSCAN ──
 # NOTE: duckdb-ml predict() assigns EVERY point to its nearest cluster mean
 # (MADlib-style simplification) — it has no "noise" concept. sklearn keeps

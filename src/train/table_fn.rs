@@ -407,6 +407,7 @@ fn register_from_blob(
         pca::PcaMlModel,
         poly::PolyModel,
         svm::SvmModel,
+        tsne::TsneModel,
         tree::{ForestClassifierModel, ForestModel, TreeModel},
         MlModel,
     };
@@ -473,6 +474,7 @@ fn register_from_blob(
         Algorithm::AdaBoost => Arc::new(AdaBoostModel::deserialize(blob)?),
         Algorithm::KaplanMeier => Arc::new(KmMlModel::deserialize(blob)?),
         Algorithm::Agglomerative => Arc::new(AgglomerativeModel::deserialize(blob)?),
+        Algorithm::TSNE => Arc::new(TsneModel::deserialize(blob)?),
         Algorithm::LassoRegression
         | Algorithm::PolynomialRegression
         | Algorithm::FuzzyCMeans

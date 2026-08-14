@@ -62,7 +62,7 @@ SELECT ml_assoc_rules(
 | **Bayesian** | `naive_bayes` |
 | **Kernel** | `svm` (binary SVC, linear/Gaussian kernel, libsvm SMO core) |
 | **Clustering** | `kmeans`, `fuzzy_cmeans` (soft-assignment, fuzziness m), `dbscan` (density-based, noise detection, linfa-clustering) |
-| **Dim Reduction** | `pca` (unsupervised), `lda` (supervised, generalized eigenproblem S_b v = λ S_w v, ridge-Cholesky + deflated power iteration) |
+| **Dim Reduction** | `pca` (unsupervised), `lda` (supervised, generalized eigenproblem S_b v = λ S_w v, ridge-Cholesky + deflated power iteration), `tsne` (nonlinear 2D embedding, deterministic; predict = nearest-row embedding) |
 | **External** | `xgboost_regressor`, `xgboost_classifier` (load via `ml_load_xgboost`), `onnx` (load via `ml_load_onnx`) |
 
 ## Metrics & Model Validation
