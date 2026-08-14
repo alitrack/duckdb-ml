@@ -49,6 +49,22 @@ al = cluster_alignment(p_ours, p_sk, 4)
 report.add("kmeans alignment vs sklearn", al, 0.95, 0.0, al >= 0.95,
            f"kmeans++ init (seed={SEED})")
 
+# ── 1b. fuzzy_cmeans: hard labels vs sklearn KMeans (m=2 soft partition) ──
+# FCM minimizes ΣΣ u^m·d with soft memberships; on well-separated Gaussians
+# its hard assignment converges to the same clusters as k-means.
+train(con, "fcm01", "fuzzy_cmeans", Xk, yk_dummy,
+      {"k": 4, "fuzziness": 2.0, "max_iters": 200, "tol": 1e-5})
+p_fcm = np.asarray(predict(con, "fcm01", Xk), float)
+al_fcm = cluster_alignment(p_fcm, p_sk, 4)
+report.add("fuzzy_cmeans hard-label alignment vs KMeans", al_fcm, 0.9, 0.0,
+           al_fcm >= 0.9, "soft→hard partition should match k-means on separated clusters")
+# determinism: retrain must be bit-identical (local PRNG in kmeans++)
+train(con, "fcm01", "fuzzy_cmeans", Xk, yk_dummy,
+      {"k": 4, "fuzziness": 2.0, "max_iters": 200, "tol": 1e-5})
+p_fcm2 = np.asarray(predict(con, "fcm01", Xk), float)
+report.add("fuzzy_cmeans retrain bit-identical", int(np.array_equal(p_fcm, p_fcm2)),
+           1.0, 0.0, np.array_equal(p_fcm, p_fcm2), "local xorshift state ⇒ reproducible")
+
 # ── 2. dbscan vs sklearn DBSCAN ──
 # NOTE: duckdb-ml predict() assigns EVERY point to its nearest cluster mean
 # (MADlib-style simplification) — it has no "noise" concept. sklearn keeps

@@ -2,6 +2,7 @@ pub mod arima;
 pub mod cox;
 pub mod dbscan;
 pub mod elastic_net;
+pub mod fcm;
 pub mod gbdt;
 pub mod kmeans;
 pub mod lasso;
@@ -326,6 +327,24 @@ pub fn train(
                 mse: result.labels.is_empty().then_some(0.0), // inertia stored as metadata
                 num_samples: x.len(),
                 model_blob: Some(blob),
+            })
+        }
+        Algorithm::FuzzyCMeans => {
+            let k = params.get("k").copied().unwrap_or(3.0) as usize;
+            let m = params.get("fuzziness").copied().unwrap_or(2.0);
+            let max_iters = params.get("max_iters").copied().unwrap_or(100.0) as usize;
+            let tol = params.get("tol").copied().unwrap_or(1e-4);
+            let result = fcm::train(x, k, m, max_iters, tol);
+            // centroids flow through TrainingResult.coefficients; FcmModel is
+            // constructed in table_fn (keeps fuzziness + iterations in metadata)
+            let flat: Vec<f64> = result.centroids.iter().flatten().copied().collect();
+            Ok(TrainingResult {
+                coefficients: flat,
+                intercept: 0.0,
+                r_squared: None,
+                mse: None,
+                num_samples: x.len(),
+                model_blob: None,
             })
         }
         Algorithm::KNNRegressor => {

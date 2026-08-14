@@ -158,7 +158,7 @@ pub fn train_and_register(
     use crate::train;
 
     let algorithm = Algorithm::parse_algorithm(algorithm_str).ok_or_else(|| {
-        format!("Unknown algorithm: '{algorithm_str}'. Available: linear_regression, ridge_regression, logistic_regression, decision_tree, random_forest, kmeans, knn_regressor, knn_classifier, naive_bayes, pca, lda, polynomial_regression")
+        format!("Unknown algorithm: '{algorithm_str}'. Available: linear_regression, ridge_regression, logistic_regression, decision_tree, random_forest, kmeans, knn_regressor, knn_classifier, naive_bayes, pca, lda, polynomial_regression, fuzzy_cmeans")
     })?;
 
     let y: Vec<f64> = match serde_json::from_str::<Vec<f64>>(target_json) {
@@ -217,7 +217,8 @@ pub fn train_and_register(
         }
     } else {
         use crate::model::{
-            lasso::LassoModel, linear::LinearModel, logistic::LogisticModel, poly::PolyModel,
+            fcm::FcmModel, lasso::LassoModel, linear::LinearModel, logistic::LogisticModel,
+            poly::PolyModel,
         };
         let lambda = params.get("lambda").copied().unwrap_or(0.0);
         let model: Arc<dyn crate::model::MlModel> = match algorithm {
@@ -237,6 +238,30 @@ pub fn train_and_register(
                     result.r_squared,
                     result.mse,
                     lambda,
+                ))
+            }
+            Algorithm::FuzzyCMeans => {
+                let k = params.get("k").copied().unwrap_or(3.0) as usize;
+                let m = params.get("fuzziness").copied().unwrap_or(2.0);
+                let max_iters = params.get("max_iters").copied().unwrap_or(100.0) as usize;
+                // coefficients = flattened k × n_features centroids
+                let nf = if n_samples > 0 && result.coefficients.len() >= k {
+                    result.coefficients.len() / k
+                } else {
+                    0
+                };
+                let mut centroids = Vec::with_capacity(k);
+                for j in 0..k {
+                    let start = j * nf;
+                    centroids.push(result.coefficients[start..start + nf].to_vec());
+                }
+                Arc::new(FcmModel::new(
+                    centroids,
+                    nf,
+                    n_samples,
+                    k,
+                    m,
+                    max_iters,
                 ))
             }
             Algorithm::RobustRegression => {
@@ -424,6 +449,7 @@ fn register_from_blob(
         Algorithm::LDA => Arc::new(LdaMlModel::deserialize(blob)?),
         Algorithm::LassoRegression
         | Algorithm::PolynomialRegression
+        | Algorithm::FuzzyCMeans
         | Algorithm::XGBoostRegressor
         | Algorithm::XGBoostClassifier
         | Algorithm::Onnx => {

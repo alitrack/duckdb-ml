@@ -1,6 +1,7 @@
 pub mod arima;
 pub mod cox;
 pub mod dbscan;
+pub mod fcm;
 pub mod kmeans;
 pub mod knn;
 pub mod lasso;

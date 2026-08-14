@@ -122,8 +122,21 @@ pub fn nearest_centroid(point: &[f64], centroids: &[Vec<f64>]) -> usize {
     best
 }
 
-/// k-means++ centroid initialization
-fn kmeans_plusplus(x: &[Vec<f64>], k: usize) -> Vec<Vec<f64>> {
+/// k-means++ centroid initialization (shared with fuzzy c-Means).
+/// Uses a local PRNG state: every call starts from the same seed, so training
+/// is bit-reproducible and thread-safe (no shared mutable state).
+pub(crate) fn kmeans_plusplus(x: &[Vec<f64>], k: usize) -> Vec<Vec<f64>> {
+    let mut st = 0x9E37_79B9_7F4A_7C15u64;
+    let mut rand_f64 = move || {
+        let v = xorshift_next(&mut st);
+        (v as f64) / (u64::MAX as f64)
+    };
+    let mut rand_usize = move |n: usize| {
+        if n == 0 {
+            return 0;
+        }
+        (xorshift_next(&mut st) as usize) % n
+    };
     let n = x.len();
     let mut centroids = Vec::with_capacity(k);
 
@@ -201,6 +214,16 @@ fn random_point_far_from_centroids(x: &[Vec<f64>], centroids: &[Vec<f64>]) -> us
 
 static XORSHIFT_STATE: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(0x9E37_79B9_7F4A_7C15);
+
+#[inline]
+fn xorshift_next(state: &mut u64) -> u64 {
+    let mut x = *state;
+    x ^= x << 13;
+    x ^= x >> 7;
+    x ^= x << 17;
+    *state = x;
+    x
+}
 
 #[inline]
 fn xorshift_u64() -> u64 {

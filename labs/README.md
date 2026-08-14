@@ -41,7 +41,7 @@ python labs/run_all.py
 | verify_02_trees.py | decision_tree / random_forest / rf_classifier / xgboost_regression / xgboost_binary | sklearn Tree/Forest/GradientBoosting | R²≥0.95 / acc≥0.97；字符串标签解码 |
 | verify_03_kernel.py | svm (linear/rbf) / svr (linear/rbf) / lda | sklearn SVC/SVR/LDA | acc≥0.95 / R²≥0.95；预测相关≥0.99；lda 判别方向|corr|≥0.99 |
 | verify_04_classify.py | logistic / multilogistic / ordinal / naive_bayes / knn | sklearn Logistic/GNB/KNN | acc≥0.85~0.95；k-NN 与 sklearn 逐位一致 |
-| verify_05_unsup.py | kmeans / dbscan / pca | sklearn KMeans/DBSCAN/PCA | 簇对齐≥0.85~0.95；PC1 相关≥0.999 |
+| verify_05_unsup.py | kmeans / fuzzy_cmeans / dbscan / pca | sklearn KMeans/DBSCAN/PCA | 簇对齐≥0.85~0.95；PC1 相关≥0.999；fcm 重训逐位一致 |
 | verify_06_misc.py | mlp / cox / arima / ml_metrics / ml_cross_validate / ml_assoc_rules | sklearn MLP/metrics/CV + 闭式 AR + 暴力 Apriori | metrics 1e-9；assoc_rules 1e-9 |
 
 注：ordinal/cox 无 sklearn 等价物，用「预测类别与真实有序类一致 +
