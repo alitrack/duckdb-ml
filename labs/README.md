@@ -64,12 +64,13 @@ python labs/run_all.py
 
 ## 已知边界
 
-- **svr-rbf 不设正确性断言（KNOWN LIMITATION，2026-08-14 labs 实测）**：
-  手写 working-set SMO 在 RBF 目标上**不稳定**——同一 sin(x) 配置一次
-  R²=0.98、另一次 R²=-0.12；x²[0,3] / sin(2x) 全范围评估 R²≈0。
-  skill 旧记录的「pred(1.5)=2.25024」单点 e2e 是碰巧命中，不代表正确拟合。
-  SVR 家族的正确性由**线性核**证明（R²=1.0、与 sklearn 预测相关 1.0）；
-  RBF 的 SMO 工作集质量是跟踪中的修复项，修好前 labs 只做「能跑且有限」探针。
+- **svr-rbf 已修复（2026-08-14，working-set SMO 重写）**：此前不稳定
+  （同配置 R² 0.98 ↔ -0.12 波动、x² 全范围 ≈-0.5）根因 = 对级 violation 全对扫描
+  在单调目标（e 全同号）上选到相邻点 → eta 极小 → β 撞 box 边界 ±C → 伪收敛。
+  修复 = libsvm 式**单点方向梯度工作集**（argmin d / argmax d，d = g + ε·sign(β)）+
+  **无偏梯度**（迭代中 bias 恒 0，梯度增量维护 O(n)/轮，终值 bias 由自由 SV 平均）+
+  更新步补 **ε·sign(β) 项**。现 sin(x)/x²/sin(2x) R²≥0.99998（sklearn 1.0/0.999997）。
+  verify_03 已加回 R²≥0.9 + 与 sklearn 预测相关≥0.99 断言。
 - ml_embed / ml_load_onnx 需 `--features onnx` 构建，默认 `make release`
   未含，故本套件不覆盖（onnx 桥的验证见仓库内单测与 openspec 记录）
 - 容差以本机 duckdb 1.5.x + sklearn 1.9 标定；升级 sklearn 大版本后

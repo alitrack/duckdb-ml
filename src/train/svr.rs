@@ -140,94 +140,83 @@ pub fn train(
 
     let mut beta = vec![0.0f64; n];
     let mut bias = 0.0f64;
-    let mut e = vec![0.0f64; n];
+    let mut e = vec![0.0f64; n]; // unbiased gradient g_i = (Kβ)_i − y_i, bias held 0 during iteration
+    for i in 0..n {
+        e[i] = -y[i];
+    }
 
-    // Working-set SMO (libsvm-style): each round picks the most violating
-    // pair and updates it; stops when no pair violates KKT. Deterministic.
-    let viol = |b: f64, e: f64| -> f64 {
-        if b.abs() < 1e-12 {
-            (e.abs() - epsilon).max(0.0)
-        } else if b > 0.0 {
-            if b >= c - 1e-9 {
-                0.0
-            } else {
-                (e - epsilon).abs()
-            }
-        } else if b <= -c + 1e-9 {
-            0.0
+    // Working-set SMO (libsvm-style): each round picks the single most
+    // violating pair by directional gradients and updates it; gradients are
+    // maintained incrementally (O(n) per round instead of O(n²) full sweep).
+    // min-form objective: min ½βᵀKβ − yᵀβ + εΣ|β|, s.t. Σβ=0, β∈[−C,C]
+    // d_i = ∂/∂βᵢ = g_i + ε·sign(β_i). i = argmin d over β_i<C (increase),
+    // j = argmax d over β_j>−C (decrease); converged when d_j − d_i ≤ tol.
+    let sgn = |v: f64| -> f64 {
+        if v > 0.0 {
+            1.0
+        } else if v < 0.0 {
+            -1.0
         } else {
-            (e + epsilon).abs()
+            0.0
         }
     };
     for _ in 0..max_iter {
+        let mut dmin = f64::INFINITY;
+        let mut ii = 0usize;
+        let mut dmax = -f64::INFINITY;
+        let mut jj = 0usize;
         for i in 0..n {
-            e[i] = (0..n).map(|m| beta[m] * k[i * n + m]).sum::<f64>() + bias - y[i];
-        }
-        let mut bi = 0usize;
-        let mut bj = 0usize;
-        let mut best = 0.0f64;
-        for i in 0..n {
-            for j in (i + 1)..n {
-                let score = viol(beta[i], e[i]) + viol(beta[j], e[j]);
-                if score <= best {
-                    continue;
-                }
-                let eta = k[i * n + i] + k[j * n + j] - 2.0 * k[i * n + j];
-                if eta <= 1e-12 {
-                    continue;
-                }
-                let s = beta[i] + beta[j];
-                let lo = (-c).max(s - c);
-                let hi = c.min(s + c);
-                let step = (beta[i] + (e[j] - e[i]) / eta).clamp(lo, hi) - beta[i];
-                if step.abs() < 1e-12 {
-                    continue;
-                }
-                best = score;
-                bi = i;
-                bj = j;
+            let d = e[i] + epsilon * sgn(beta[i]);
+            if beta[i] < c - 1e-9 && d < dmin {
+                dmin = d;
+                ii = i;
+            }
+            if beta[i] > -c + 1e-9 && d > dmax {
+                dmax = d;
+                jj = i;
             }
         }
-        if best < tol {
+        if jj == ii {
+            // degenerate: same point wins both sides (all free gradients equal
+            // or n==1) — no improving pair exists
             break;
         }
-        let eta = k[bi * n + bi] + k[bj * n + bj] - 2.0 * k[bi * n + bj];
+        if dmax - dmin < tol {
+            break;
+        }
+        let eta = k[ii * n + ii] + k[jj * n + jj] - 2.0 * k[ii * n + jj];
         if eta <= 1e-12 {
             break; // degenerate kernel slice; cannot improve further
         }
-        // maximize dual W: Δ = −(E_i − E_j)/η (gradient ascent on β)
-        let delta = (e[bj] - e[bi]) / eta;
-        let s = beta[bi] + beta[bj];
+        // closed-form 2-variable minimizer: Δβ = (d_j − d_i)/η, clamped to box
+        let num = e[jj] - e[ii] + epsilon * (sgn(beta[jj]) - sgn(beta[ii]));
+        let delta = num / eta;
+        let s = beta[ii] + beta[jj];
         let lo = (-c).max(s - c);
         let hi = c.min(s + c);
-        let new_i = (beta[bi] + delta).clamp(lo, hi);
+        let new_i = (beta[ii] + delta).clamp(lo, hi);
         let new_j = s - new_i;
-        beta[bi] = new_i;
-        beta[bj] = new_j;
-        // bias update from KKT active set
-        let b_i = y[bi]
-            - (0..n).map(|m| beta[m] * k[bi * n + m]).sum::<f64>()
-            - epsilon * if new_i > 0.0 { 1.0 } else { -1.0 };
-        let b_j = y[bj]
-            - (0..n).map(|m| beta[m] * k[bj * n + m]).sum::<f64>()
-            - epsilon * if new_j > 0.0 { 1.0 } else { -1.0 };
-        if new_i.abs() > 1e-9 && new_i.abs() < c - 1e-9 {
-            bias = b_i;
-        } else if new_j.abs() > 1e-9 && new_j.abs() < c - 1e-9 {
-            bias = b_j;
-        } else {
-            bias = (b_i + b_j) / 2.0;
+        if (new_i - beta[ii]).abs() < 1e-14 {
+            break; // no movement; further rounds cannot improve
+        }
+        let di = new_i - beta[ii];
+        let dj = new_j - beta[jj];
+        beta[ii] = new_i;
+        beta[jj] = new_j;
+        // incremental gradient update: g_k += Δβ_i·K(k,i) + Δβ_j·K(k,j)
+        for kk in 0..n {
+            e[kk] += di * k[kk * n + ii] + dj * k[kk * n + jj];
         }
     }
 
-    // final bias: average over free support vectors (0 < |β| < C)
+    // final bias: average over free support vectors (0 < |β| < C).
+    // e_i = (Kβ)_i − y_i  ⇒  b = y_i − (Kβ)_i − ε·sign(β_i) = −e_i − ε·sign(β_i)
     let mut b_sum = 0.0f64;
     let mut b_cnt = 0usize;
     for i in 0..n {
         if beta[i].abs() > 1e-9 && beta[i].abs() < c - 1e-9 {
-            let f: f64 = (0..n).map(|m| beta[m] * k[i * n + m]).sum::<f64>();
             let sign = if beta[i] > 0.0 { 1.0 } else { -1.0 };
-            b_sum += y[i] - f - epsilon * sign;
+            b_sum += -e[i] - epsilon * sign;
             b_cnt += 1;
         }
     }

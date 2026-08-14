@@ -73,23 +73,36 @@ report.add("svr-linear R2(ours)", r2_ours, 0.99, 0.0, r2_ours >= 0.99,
 report.add("svr-linear pred corr vs sklearn", sign_corr(p_ours, p_sk), 1.0, 0.001,
            sign_corr(p_ours, p_sk) >= 0.999)
 
-# ── 4. svr rbf: KNOWN LIMITATION — no correctness assertion ──
-# labs 实测 (2026-08-14): the hand-written working-set SMO is UNSTABLE on
-# RBF targets — the same sin(x) config scored R²=0.98 in one draw and
-# R²=-0.12 in another; full-range x² / sin(2x) evaluations score R²≈0.
-# The skill's original single-point e2e ("pred(1.5)=2.25024") was a lucky
-# point, not a correct fit. Correctness of the SVR family is asserted via
-# the linear kernel below (R²=1.0, exact); RBF correctness is a tracked
-# follow-up (SMO working-set quality) and intentionally NOT asserted here.
-# The probe below only verifies the path runs and stays finite.
+# ── 4. svr rbf: sin(x) + x² — fixed working-set SMO (2026-08-14) ──
+# Previously unstable (R² 0.98 ↔ -0.12 across draws, x² ≈ -0.5) due to
+# pair-sweep working set that pushed β to box boundaries on monotone targets.
+# Root cause fixed: libsvm-style directional-gradient working set + unbiased
+# gradients (bias held 0 in iteration, final bias from free SVs) + ε·sign(β)
+# term in the pair update + incremental gradient maintenance.
 Xs2 = rng.uniform(-2, 2, 200)[:, None]
 ys2 = np.sin(Xs2[:, 0])
 Xg, Xh, yg, yh = split(Xs2, ys2)
-train(con, "svr_rbf", "svr", Xg, yg, {"c": 50.0, "epsilon": 1e-4, "kernel": 1, "gamma": 1.0, "tol": 1e-5, "max_iter": 10000})
+train(con, "svr_rbf", "svr", Xg, yg, {"c": 50.0, "epsilon": 1e-4, "kernel": 1, "gamma": 1.0, "tol": 1e-3, "max_iter": 20000})
 p_ours = np.asarray(predict(con, "svr_rbf", Xh), float)
-finite_ok = bool(np.isfinite(p_ours).all())
-report.add("svr-rbf runs & finite", finite_ok, True, 0.0, finite_ok,
-           "correctness: KNOWN LIMITATION (see README) — not asserted")
+p_sk = SVR(kernel="rbf", C=50.0, epsilon=1e-4, gamma=1.0).fit(Xg, yg).predict(Xh)
+r2_ours, r2_sk = r2(yh, p_ours), r2(yh, p_sk)
+report.add("svr-rbf sin(x) R2(ours)", r2_ours, 0.9, 0.0, r2_ours >= 0.9,
+           f"sklearn R2={r2_sk:.4f}")
+report.add("svr-rbf sin(x) pred corr vs sklearn", sign_corr(p_ours, p_sk), 1.0, 0.01,
+           sign_corr(p_ours, p_sk) >= 0.99)
+
+# x² on [0,3] — the monotone target that exposed the old working-set bug
+Xm = rng.uniform(0, 3, 200)[:, None]
+ym = Xm[:, 0] ** 2
+Xp, Xq, yp, yq = split(Xm, ym)
+train(con, "svr_rbf2", "svr", Xp, yp, {"c": 50.0, "epsilon": 1e-4, "kernel": 1, "gamma": 1.0, "tol": 1e-3, "max_iter": 20000})
+p2_ours = np.asarray(predict(con, "svr_rbf2", Xq), float)
+p2_sk = SVR(kernel="rbf", C=50.0, epsilon=1e-4, gamma=1.0).fit(Xp, yp).predict(Xq)
+r2b_ours, r2b_sk = r2(yq, p2_ours), r2(yq, p2_sk)
+report.add("svr-rbf x^2 R2(ours)", r2b_ours, 0.9, 0.0, r2b_ours >= 0.9,
+           f"sklearn R2={r2b_sk:.4f}")
+report.add("svr-rbf x^2 pred corr vs sklearn", sign_corr(p2_ours, p2_sk), 1.0, 0.01,
+           sign_corr(p2_ours, p2_sk) >= 0.99)
 
 ok = report.print_report()
 con.close()
