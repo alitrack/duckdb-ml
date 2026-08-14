@@ -55,6 +55,7 @@ pub unsafe fn ml_init(con: Connection) -> Result<(), Box<dyn Error>> {
     con.register_scalar_function::<metrics::MetricsFn>("ml_metrics")?;
     con.register_scalar_function::<cross_validate::CrossValidateFn>("ml_cross_validate")?;
     con.register_scalar_function::<scalar::CoxTrainFn>("ml_cox_train")?;
+    con.register_scalar_function::<scalar::KmTrainFn>("ml_km_train")?;
 
     log::info!("duckdb_ml initialized successfully");
     Ok(())

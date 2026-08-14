@@ -87,6 +87,28 @@ rho = spearmanr(p_ours, log_h).statistic
 report.add("cox risk~log-hazard spearman", rho, 0.9, 0.0, rho >= 0.9,
            "higher predicted risk ⇔ higher true hazard")
 
+# ── 2b. kaplan-meier: median survival vs closed-form product-limit ──
+# No library needed — the product-limit estimator is a closed formula; verify
+# bit-exact median against a numpy reimplementation of the same formula.
+from common import predict as _predict
+nk = 200
+kt = np.sort(rng.exponential(2.0, nk).round(1))
+ke = (rng.random(nk) > 0.3).astype(float)
+kt[ke == 0] += rng.uniform(0.0, 0.5, int((ke == 0).sum()))
+con.execute("SELECT ml_km_train(?, ?, ?)",
+            ["km01", json.dumps(kt.tolist()), json.dumps(ke.tolist())]).fetchone()
+med_ours = float(_predict(con, "km01", np.zeros((3, 1)))[0])
+S_km, cur = [], 1.0
+for t in np.unique(kt[ke == 1]):
+    nrisk = int((kt >= t).sum())
+    d = int(((kt == t) & (ke == 1)).sum())
+    cur *= 1.0 - d / nrisk
+    S_km.append((t, cur))
+med_ref = next((t for t, s in S_km if s <= 0.5), float(kt.max()))
+report.add("kaplan-meier median == product-limit ref", int(med_ours == med_ref),
+           1.0, 0.0, med_ours == med_ref,
+           f"numpy closed-form median={med_ref}")
+
 # ── 3. arima: AR(2) forecast vs true future ──
 # Deterministic AR(2) series (y_t = 0.6·y_{t-1} + 0.25·y_{t-2}, no noise):
 # a perfectly predictable series must be predicted near-exactly. This is the

@@ -126,6 +126,34 @@ impl VArrowScalar for PredictBatchValueFn {
 ///    "n_samples":N, "n_features":K}
 pub struct OlsFn;
 
+/// ml_km_train(model, time_json, event_json) → VARCHAR
+/// Kaplan-Meier survival curve training (feature-less). predict() returns the
+/// median survival time.
+pub struct KmTrainFn;
+
+impl VArrowScalar for KmTrainFn {
+    type State = ();
+
+    fn invoke(_state: &Self::State, input: RecordBatch) -> Result<ArrayRef, Box<dyn Error>> {
+        let n = input.num_rows();
+        let model = col_str(&input, 0)?;
+        let time = col_str(&input, 1)?;
+        let event = col_str(&input, 2)?;
+
+        crate::train::table_fn::km_train_and_register(model, time, event)?;
+
+        let out = StringArray::from(vec![Some(model.to_string()); n]);
+        Ok(Arc::new(out))
+    }
+
+    fn signatures() -> Vec<ArrowFunctionSignature> {
+        vec![ArrowFunctionSignature::exact(
+            vec![DataType::Utf8; 3],
+            DataType::Utf8,
+        )]
+    }
+}
+
 /// ml_cox_train(model, time_json, event_json, features_json, params_json) → VARCHAR
 /// Cox proportional hazards training with separate time/event arrays.
 pub struct CoxTrainFn;

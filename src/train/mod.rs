@@ -1,9 +1,11 @@
+pub mod adaboost;
 pub mod arima;
 pub mod cox;
 pub mod dbscan;
 pub mod elastic_net;
 pub mod fcm;
 pub mod gbdt;
+pub mod km;
 pub mod kmeans;
 pub mod lasso;
 pub mod linear;
@@ -246,7 +248,10 @@ pub fn train(
             })
         }
         Algorithm::CoxProportionalHazards => {
-            Err("cox requires separate time/event arrays — use ml_cox_train(model, time_json, event_json, features_json, params_json)".into())
+            Err("cox models are trained via ml_cox_train(model, time, event, features, params)".into())
+        }
+        Algorithm::KaplanMeier => {
+            Err("kaplan-meier models are trained via ml_km_train(model, time, event)".into())
         }
         Algorithm::RobustRegression => {
             let c = params.get("c").copied().unwrap_or(1.345);
@@ -345,6 +350,23 @@ pub fn train(
                 mse: None,
                 num_samples: x.len(),
                 model_blob: None,
+            })
+        }
+        Algorithm::AdaBoost => {
+            let n_estimators = params.get("n_estimators").copied().unwrap_or(50.0) as usize;
+            let result = adaboost::train(x, y, n_estimators);
+            let n_feats = if x.is_empty() { 0 } else { x[0].len() };
+            let m =
+                crate::model::adaboost::AdaBoostModel::new(&result, n_feats, x.len());
+            let blob = crate::model::MlModel::serialize(&m)
+                .map_err(|e| -> Box<dyn Error> { format!("adaboost serialize: {e}").into() })?;
+            Ok(TrainingResult {
+                coefficients: vec![],
+                intercept: 0.0,
+                r_squared: None,
+                mse: None,
+                num_samples: x.len(),
+                model_blob: Some(blob),
             })
         }
         Algorithm::KNNRegressor => {

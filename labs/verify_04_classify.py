@@ -129,6 +129,31 @@ report.add("knn_regressor R2(ours)", r2_ours, 0.9, 0.0, r2_ours >= 0.9,
 report.add("knn_regressor max|pred diff| vs sklearn", maxdiff, 0.0, 1e-6,
            maxdiff < 1e-6, "exact k-NN should be numerically identical")
 
+# ── 7. adaboost (stump ensemble) vs sklearn SAMME ──
+# Two shifted Gaussians: single stump ~75%, boosting must exceed it.
+from sklearn.ensemble import AdaBoostClassifier
+from sklearn.tree import DecisionTreeClassifier
+nab = 400
+ab1 = rng.normal([1, 1], 1.0, (nab // 2, 2))
+ab2 = rng.normal([3.8, 3.8], 1.0, (nab // 2, 2))
+Xab = np.vstack([ab1, ab2])
+yab = np.array([0.0] * (nab // 2) + [1.0] * (nab // 2))
+Xabt, Xabv, yabt, yabv = split(Xab, yab)
+train(con, "ab50", "adaboost", Xabt, yabt, {"n_estimators": 50})
+p_ours = np.asarray(predict(con, "ab50", Xabv), float)
+p_sk = AdaBoostClassifier(
+    estimator=DecisionTreeClassifier(max_depth=1),
+    n_estimators=50,
+    random_state=0,
+).fit(Xabt, yabt).predict(Xabv)
+acc_ours = accuracy(yabv, p_ours)
+acc_sk = accuracy(yabv, p_sk)
+agree = accuracy(p_ours, p_sk)
+report.add("adaboost accuracy(ours)", acc_ours, 0.8, 0.0, acc_ours >= 0.8,
+           f"sklearn acc={acc_sk:.4f}")
+report.add("adaboost label agreement vs sklearn", agree, 0.85, 0.0, agree >= 0.85,
+           "same SAMME stumps; threshold ties may differ")
+
 ok = report.print_report()
 con.close()
 raise SystemExit(0 if ok else 1)

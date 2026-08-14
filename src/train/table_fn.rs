@@ -158,7 +158,7 @@ pub fn train_and_register(
     use crate::train;
 
     let algorithm = Algorithm::parse_algorithm(algorithm_str).ok_or_else(|| {
-        format!("Unknown algorithm: '{algorithm_str}'. Available: linear_regression, ridge_regression, logistic_regression, decision_tree, random_forest, kmeans, knn_regressor, knn_classifier, naive_bayes, pca, lda, polynomial_regression, fuzzy_cmeans")
+        format!("Unknown algorithm: '{algorithm_str}'. Available: linear_regression, ridge_regression, logistic_regression, decision_tree, random_forest, kmeans, knn_regressor, knn_classifier, naive_bayes, pca, lda, polynomial_regression, fuzzy_cmeans, adaboost")
     })?;
 
     let y: Vec<f64> = match serde_json::from_str::<Vec<f64>>(target_json) {
@@ -361,6 +361,29 @@ pub fn cox_train_and_register(
     Ok(model_name.to_string())
 }
 
+/// Train a Kaplan-Meier survival model (feature-less) and register it.
+/// `predict()` returns the median survival time; the full curve is available
+/// via metadata (curve_points) and the serialized model.
+pub fn km_train_and_register(
+    model_name: &str,
+    time_json: &str,
+    event_json: &str,
+) -> Result<String, Box<dyn Error>> {
+    use crate::model::km::KmMlModel;
+    use crate::train::km;
+
+    let time: Vec<f64> =
+        serde_json::from_str(time_json).map_err(|e| format!("Invalid time JSON: {e}"))?;
+    let event: Vec<f64> =
+        serde_json::from_str(event_json).map_err(|e| format!("Invalid event JSON: {e}"))?;
+    if time.is_empty() {
+        return Err("Training data is empty".into());
+    }
+    let result = km::train(&time, &event);
+    global_registry().insert(model_name.to_string(), Arc::new(KmMlModel::new(&result)));
+    Ok(model_name.to_string())
+}
+
 /// Deserialize a blob into an MlModel and return as Arc
 fn register_from_blob(
     algorithm: Algorithm,
@@ -370,9 +393,8 @@ fn register_from_blob(
     blob: &[u8],
 ) -> Result<Arc<dyn crate::model::MlModel>, Box<dyn Error>> {
     use crate::model::{
-        arima::ArimaMlModel,
-        cox::CoxMlModel,
-        dbscan::DbscanModel,
+        adaboost::AdaBoostModel, arima::ArimaMlModel, cox::CoxMlModel,
+        dbscan::DbscanModel, km::KmMlModel,
         kmeans::KMeansModel,
         knn::KnnMlModel,
         lda::LdaMlModel,
@@ -447,6 +469,8 @@ fn register_from_blob(
         Algorithm::NaiveBayes => Arc::new(NbMlModel::deserialize(blob)?),
         Algorithm::PCA => Arc::new(PcaMlModel::deserialize(blob)?),
         Algorithm::LDA => Arc::new(LdaMlModel::deserialize(blob)?),
+        Algorithm::AdaBoost => Arc::new(AdaBoostModel::deserialize(blob)?),
+        Algorithm::KaplanMeier => Arc::new(KmMlModel::deserialize(blob)?),
         Algorithm::LassoRegression
         | Algorithm::PolynomialRegression
         | Algorithm::FuzzyCMeans

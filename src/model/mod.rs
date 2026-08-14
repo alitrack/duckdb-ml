@@ -1,8 +1,10 @@
+pub mod adaboost;
 pub mod arima;
 pub mod cox;
 pub mod dbscan;
 pub mod fcm;
 pub mod kmeans;
+pub mod km;
 pub mod knn;
 pub mod lasso;
 pub mod lda;
