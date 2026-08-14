@@ -61,7 +61,7 @@ SELECT ml_assoc_rules(
 | **Distance** | `knn_regressor`, `knn_classifier` |
 | **Bayesian** | `naive_bayes` |
 | **Kernel** | `svm` (binary SVC, linear/Gaussian kernel, libsvm SMO core) |
-| **Clustering** | `kmeans`, `fuzzy_cmeans` (soft-assignment, fuzziness m), `dbscan` (density-based, noise detection, linfa-clustering) |
+| **Clustering** | `kmeans`, `fuzzy_cmeans` (soft-assignment, fuzziness m), `dbscan` (density-based, noise detection, linfa-clustering), `agglomerative` (hierarchical, single/complete/average linkage) |
 | **Dim Reduction** | `pca` (unsupervised), `lda` (supervised, generalized eigenproblem S_b v = λ S_w v, ridge-Cholesky + deflated power iteration), `tsne` (nonlinear 2D embedding, deterministic; predict = nearest-row embedding) |
 | **External** | `xgboost_regressor`, `xgboost_classifier` (load via `ml_load_xgboost`), `onnx` (load via `ml_load_onnx`) |
 
