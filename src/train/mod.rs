@@ -15,6 +15,7 @@ pub mod multilogistic;
 pub mod ordinal;
 pub mod poly;
 pub mod robust;
+pub mod smote;
 pub mod svm;
 pub mod svr;
 pub mod table_fn;

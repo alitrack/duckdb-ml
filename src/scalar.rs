@@ -14,7 +14,7 @@
 //!           (SELECT to_json(list(["age","score"])) FROM _1)),
 //!       '["DOUBLE"]')) AS prediction;
 
-use arrow::array::{Array, ArrayRef, StringArray};
+use arrow::array::{Array, ArrayRef, Float64Array, StringArray};
 use arrow::datatypes::DataType;
 use arrow::record_batch::RecordBatch;
 use duckdb::vscalar::arrow::{ArrowFunctionSignature, VArrowScalar};
@@ -125,6 +125,61 @@ impl VArrowScalar for PredictBatchValueFn {
 ///   {"coefficients":[b1,b2,...], "intercept":b0, "r_squared":.., "mse":..,
 ///    "n_samples":N, "n_features":K}
 pub struct OlsFn;
+
+/// ml_smote(x_json, y_json, k, dup_ratio) → VARCHAR
+/// SMOTE oversampling for the minority class. Returns JSON
+/// {"x": [[...], ...], "y": [labels], "minority": label, "before": n,
+///  "after": m} of synthetic samples. Deterministic (local fixed-seed PRNG).
+pub struct SmoteFn;
+
+impl VArrowScalar for SmoteFn {
+    type State = ();
+
+    fn invoke(_state: &Self::State, input: RecordBatch) -> Result<ArrayRef, Box<dyn Error>> {
+        let n = input.num_rows();
+        let x_json = col_str(&input, 0)?;
+        let y_json = col_str(&input, 1)?;
+        let k_arr = input
+            .column(2)
+            .as_any()
+            .downcast_ref::<Float64Array>()
+            .ok_or("col 2 is not DOUBLE")?;
+        let dr_arr = input
+            .column(3)
+            .as_any()
+            .downcast_ref::<Float64Array>()
+            .ok_or("col 3 is not DOUBLE")?;
+        let k = k_arr.value(0);
+        let dup_ratio = dr_arr.value(0);
+
+        let x: Vec<Vec<f64>> = serde_json::from_str(x_json)
+            .map_err(|e| format!("Invalid features JSON: {e}"))?;
+        let y: Vec<f64> = serde_json::from_str(y_json)
+            .map_err(|e| format!("Invalid labels JSON: {e}"))?;
+
+        let result = crate::train::smote::smote(&x, &y, k as usize, dup_ratio);
+        let out_json = serde_json::json!({
+            "x": result.synthetic_x,
+            "y": result.synthetic_y,
+            "minority": result.minority_label,
+            "before": result.total_before,
+            "after": result.total_after,
+        })
+        .to_string();
+
+        let out = StringArray::from(vec![Some(out_json); n]);
+        Ok(Arc::new(out))
+    }
+
+    fn signatures() -> Vec<ArrowFunctionSignature> {
+        vec![ArrowFunctionSignature::exact(
+            vec![DataType::Utf8, DataType::Utf8, DataType::Float64, DataType::Float64],
+            DataType::Utf8,
+        )]
+    }
+}
+
+
 
 /// ml_km_train(model, time_json, event_json) → VARCHAR
 /// Kaplan-Meier survival curve training (feature-less). predict() returns the

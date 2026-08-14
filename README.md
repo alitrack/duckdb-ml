@@ -49,9 +49,10 @@ SELECT ml_assoc_rules(
 |----------|-----------|
 | **Regression** | `linear_regression`, `ridge_regression`, `lasso_regression`, `elastic_net`, `robust` (Huber), `polynomial_regression` (degree ≥ 1, per-feature powers, no interaction terms) |
 | **Kernel** | `svm` (classification), `svr` (ε-SVR regression: linear/rbf/poly/sigmoid kernels, hand-written working-set SMO) |
-| **Trees** | `decision_tree`, `random_forest` (regression), `rf_classifier` (Gini splits, majority vote; string labels auto-encoded) |
+| **Trees** | `decision_tree`, `random_forest` (regression), `rf_classifier` (Gini splits, majority vote; string labels auto-encoded), `adaboost` (SAMME weighted stump ensemble) |
 | **Generalized Linear** | `logistic_regression` (binary), `multilogistic` (softmax multi-class), `ordinal` (cumulative-logit ordered multi-class) |
-| **Survival** | `cox` (proportional hazards, via `ml_cox_train` — time/event/features) |
+| **Survival** | `cox` (proportional hazards, via `ml_cox_train`), `kaplan_meier` (product-limit curve, via `ml_km_train`; predict = median survival) |
+| **Data Aug** | `ml_smote(x_json, y_json, k, dup_ratio)` — deterministic minority oversampling (JSON out) |
 | **Time Series** | `arima` (ARIMA(p,d,q) forecasting) |
 | **Tree** | `decision_tree`, `random_forest` |
 | **Gradient Boosting** | `xgboost_regression`, `xgboost_binary` (pure-Rust GBDT) |

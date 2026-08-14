@@ -40,9 +40,9 @@ python labs/run_all.py
 | verify_01_linear.py | ml_ols / linear / ridge / lasso / elastic_net / robust / polynomial_regression | sklearn LinearRegression/Ridge/Lasso/ElasticNet/HuberRegressor/PolynomialFeatures | 系数 1e-6；预测 R²≥0.9~0.99；多项式单特征逐位一致 |
 | verify_02_trees.py | decision_tree / random_forest / rf_classifier / xgboost_regression / xgboost_binary | sklearn Tree/Forest/GradientBoosting | R²≥0.95 / acc≥0.97；字符串标签解码 |
 | verify_03_kernel.py | svm (linear/rbf) / svr (linear/rbf) / lda | sklearn SVC/SVR/LDA | acc≥0.95 / R²≥0.95；预测相关≥0.99；lda 判别方向|corr|≥0.99 |
-| verify_04_classify.py | logistic / multilogistic / ordinal / naive_bayes / knn | sklearn Logistic/GNB/KNN | acc≥0.85~0.95；k-NN 与 sklearn 逐位一致 |
+| verify_04_classify.py | logistic / multilogistic / ordinal / naive_bayes / knn / adaboost | sklearn Logistic/GNB/KNN/AdaBoost(SAMME) | acc≥0.85~0.95；k-NN 逐位一致；adaboost acc≥0.8 + 标签一致≥0.85 |
 | verify_05_unsup.py | kmeans / fuzzy_cmeans / dbscan / pca | sklearn KMeans/DBSCAN/PCA | 簇对齐≥0.85~0.95；PC1 相关≥0.999；fcm 重训逐位一致 |
-| verify_06_misc.py | mlp / cox / arima / ml_metrics / ml_cross_validate / ml_assoc_rules | sklearn MLP/metrics/CV + 闭式 AR + 暴力 Apriori | metrics 1e-9；assoc_rules 1e-9 |
+| verify_06_misc.py | mlp / cox / arima / kaplan_meier / smote / ml_metrics / ml_cross_validate / ml_assoc_rules | sklearn MLP/metrics/CV + 闭式 AR + 闭式乘积限 + 暴力 Apriori | metrics 1e-9；km 中位逐位一致；smote 数量/局部性/重训一致 |
 
 注：ordinal/cox 无 sklearn 等价物，用「预测类别与真实有序类一致 +
 与潜变量秩相关」/「风险分与真实 log-hazard 秩相关」证明；pca 的

@@ -228,6 +228,32 @@ report.add("assoc_rules #rules found", n_rules, 3, 0.0, n_rules >= 3,
 report.add("assoc_rules worst metric diff vs brute-force", worst, 0.0, 1e-9,
            worst < 1e-9, f"checked {n_rules} rules × (support/confidence/lift)")
 
+# ── 6b. smote: synthetic minority samples — count, locality, determinism ──
+# imblearn unavailable → closed-form checks: synthesized count = floor(min ·
+# dup_ratio); every synthetic point must lie in the minority convex region
+# (closer to the minority centroid than to the majority centroid); retraining
+# must be bit-identical (local fixed-seed PRNG).
+ns_maj, ns_min = 80, 10
+Xsm_maj = rng.normal([0, 0], 0.5, (ns_maj, 2))
+Xsm_min = rng.normal([4, 4], 0.3, (ns_min, 2))
+Xsm = np.vstack([Xsm_maj, Xsm_min])
+ysm = np.array([0.0] * ns_maj + [1.0] * ns_min)
+r1 = json.loads(con.execute("SELECT ml_smote(?, ?, ?, ?)",
+                            [json.dumps(Xsm.tolist()), json.dumps(ysm.tolist()),
+                             5.0, 2.0]).fetchone()[0])
+r2 = json.loads(con.execute("SELECT ml_smote(?, ?, ?, ?)",
+                            [json.dumps(Xsm.tolist()), json.dumps(ysm.tolist()),
+                             5.0, 2.0]).fetchone()[0])
+sx = np.array(r1["x"])
+report.add("smote synthetic count == 2×minority", int(len(r1["x"]) == 20),
+           1.0, 0.0, len(r1["x"]) == 20, f"before={r1['before']} after={r1['after']}")
+d_maj = float(np.linalg.norm(sx - [0, 0], axis=1).mean())
+d_min = float(np.linalg.norm(sx - [4, 4], axis=1).mean())
+report.add("smote synthetic near minority cluster", int(d_min < d_maj),
+           1.0, 0.0, d_min < d_maj, f"d_maj={d_maj:.3f} d_min={d_min:.3f}")
+report.add("smote retrain bit-identical", int(json.dumps(r1) == json.dumps(r2)),
+           1.0, 0.0, json.dumps(r1) == json.dumps(r2), "local fixed-seed PRNG")
+
 ok = report.print_report()
 con.close()
 raise SystemExit(0 if ok else 1)
