@@ -1,7 +1,7 @@
 # duckdb-ml
 
 **Lightweight, columnar-native, train+inference ML extension for DuckDB.**
-Zero Python dependencies. 18 algorithms in pure Rust.
+Zero Python dependencies. 34 algorithms in pure Rust.
 
 ```sql
 -- Train
@@ -405,7 +405,7 @@ Result JSON: `{"results":[{"row_id":1,"score":0.99},...],"scanned":N,
   2026-08) is deferred until a >500k-row benchmark shows full-scan is too slow.
 - **Pure Rust XGBoost** — train GBDT ensembles, serialize to XGBoost-compatible JSON
 - **External Models** — load ONNX and pre-trained XGBoost JSON files
-- **18 algorithms** — linear, trees, boosting, neural, distance, bayesian, clustering, dim reduction
+- **34 algorithms** — linear, trees, boosting, neural, distance, bayesian, clustering, dim reduction
 
 ## Architecture
 

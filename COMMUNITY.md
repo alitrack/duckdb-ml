@@ -29,8 +29,8 @@ make release   # produces target/duckdb_ml.duckdb_extension
 ## Extension Metadata
 
 - **Name:** `ml`
-- **Description:** Train+inference machine learning in SQL (18 algorithms, zero Python)
-- **Version:** v0.15.0
+- **Description:** Train+inference machine learning in SQL (34 algorithms, zero Python)
+- **Version:** v0.2.0
 - **DuckDB min version:** v1.1.0
 - **License:** MIT
 - **Repository:** https://github.com/alitrack/duckdb-ml
