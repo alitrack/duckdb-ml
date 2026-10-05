@@ -181,13 +181,27 @@ pub fn train_and_register(
                 .collect()
         }
     };
+    // Unsupervised algorithms (kmeans, fuzzy_cmeans, dbscan, agglomerative,
+    // pca) do not use a target vector — an empty target is valid for them.
+    let unsupervised = matches!(
+        algorithm,
+        Algorithm::KMeans
+            | Algorithm::FuzzyCMeans
+            | Algorithm::DBSCAN
+            | Algorithm::Agglomerative
+            | Algorithm::PCA
+    );
+
     let x: Vec<Vec<f64>> =
         serde_json::from_str(features_json).map_err(|e| format!("Invalid features JSON: {e}"))?;
 
-    if x.is_empty() || y.is_empty() {
+    if x.is_empty() {
         return Err("Training data is empty".into());
     }
-    if x.len() != y.len() {
+    if !unsupervised && y.is_empty() {
+        return Err("Training data is empty".into());
+    }
+    if !unsupervised && x.len() != y.len() {
         return Err(format!(
             "Sample count mismatch: {} features rows vs {} target values",
             x.len(),
