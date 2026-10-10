@@ -1,0 +1,15 @@
+{
+  "name": "duckdb-ml",
+  "owner": {
+    "name": "alitrack",
+    "url": "https://github.com/alitrack"
+  },
+  "plugins": [
+    {
+      "name": "duckdb-ml",
+      "description": "Verified SQL knowledge for the ml DuckDB extension: 34 pure-Rust ML algorithms (train/predict/deploy), AutoML comparison, ONNX embeddings, similarity search, and association rules — zero Python",
+      "source": "./duckdb-ml",
+      "category": "data"
+    }
+  ]
+}

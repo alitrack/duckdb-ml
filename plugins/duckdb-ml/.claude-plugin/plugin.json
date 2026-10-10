@@ -1,0 +1,9 @@
+{
+  "name": "duckdb-ml",
+  "version": "0.2.0",
+  "description": "Verified, source-checked SQL knowledge for the ml DuckDB extension. Three skills: training & inference lifecycle, AutoML comparison + snapshots/deploy, and embeddings/similarity/association rules.",
+  "author": {
+    "name": "alitrack"
+  },
+  "homepage": "https://github.com/alitrack/duckdb-ml"
+}
